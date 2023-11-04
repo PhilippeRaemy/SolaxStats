@@ -9,6 +9,7 @@ site_password = os.environ['SITE_PASSWORD']
 config_password = os.environ['CONFIG_PASSWORD']
 encrypted_password = os.environ['ENCRYPTED_PASSWORD']
 site_id = os.environ['SITE_ID']
+local_file = os.environ['SOLAX_STATS_FILE']
 
 
 def login(url, proxies) -> requests.Session:
@@ -34,7 +35,7 @@ def login(url, proxies) -> requests.Session:
     payload = {'username': user_name, 'userpwd': encrypted_password}
 
     session = requests.Session()
-    response = session.post(url, headers=headers, data=payload) #, proxies=proxies, verify=False)
+    response = session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
     return session, (json_decode(response))
 
 
@@ -64,19 +65,20 @@ def get_daily_data(session, token, url, date: datetime, proxies):
         'Sec-Fetch-Site': 'same-origin',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
         'lang': 'en_US',
-        # 'sec-ch-ua': '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
-        # 'sec-ch-ua-mobile': '?0',
-        # 'sec-ch-ua-platform': '"Windows"',
+        'sec-ch-ua': '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
         'token': token,
         'version': 'blue',
     }
     print(payload)
     print(json.dumps(headers, indent=2))
     print(len(payload))
-    return session.post(url, headers=headers, data=payload) # , proxies=proxies, verify=False)
+    return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
 
 if __name__ == '__main__':
+    # fiddler proxy
     http_proxy = "http://127.0.0.1:8888"
     https_proxy = "http://127.0.0.1:8888"
 
@@ -84,6 +86,18 @@ if __name__ == '__main__':
         "http": http_proxy,
         "https": https_proxy,
     }
+
+    try:
+        with open(local_file, 'r') as stats_file:
+            stats = json.loads(stats_file.read())
+    except Exception as ex:
+        print(ex)
+        stats = []
+
+    if stats:
+        last_datetime = max(r['uploadTimeValue'] for d in stats if d.get('success') for r in d['object'])
+    else:
+        last_datetime = '2023-09-01'
 
     session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies)
     data = get_daily_data(session, session_response.get('token'),
