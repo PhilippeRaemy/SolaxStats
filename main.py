@@ -1,4 +1,5 @@
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 import json
 import os
 
@@ -94,16 +95,33 @@ if __name__ == '__main__':
         print(ex)
         stats = []
 
-    if stats:
-        last_datetime = max(r['uploadTimeValue'] for d in stats if d.get('success') for r in d['object'])
-    else:
-        last_datetime = '2023-09-01'
+    target_folder = os.path.dirname(local_file)
+    os.makedirs(target_folder, exist_ok=True)
+    target_file = local_file[len(target_folder + os.pathsep):]
+    target_file_segments = target_file.split('.')
+    target_file_segments.insert(-1, '(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
+    target_file_pattern = re.compile('.'.join(target_file_segments))
+
+    try:
+        last_datetime = max(datetime(int(di['yyyy']), int(di['mm']), int(di['dd']))
+                            for di in (ma.groupdict()
+                                       for ma in (target_file_pattern.match(fi)
+                                                  for fi in os.listdir(target_folder)) if ma)
+                            )
+    except:
+        last_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
     session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies)
-    data = get_daily_data(session, session_response.get('token'),
-                          'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
-                          datetime(2023, 11, 3), proxies
-                          )
-    json_response = json_decode(data)
+    while last_datetime < datetime.now():
+        data = get_daily_data(session, session_response.get('token'),
+                              'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
+                              datetime(2023, 11, 3), proxies
+                              )
+        json_response = json_decode(data)
+        target_file_segments[-2]= last_datetime.strftime('%Y-%m-%d')
+        with open(os.path.join(target_folder, '.'.join(target_file_segments)), 'w') as fi:
+            fi.write(json.dumps(json_response, indent=2))
+
+        last_datetime += timedelta(days=1)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
