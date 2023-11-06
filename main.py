@@ -115,7 +115,7 @@ if __name__ == '__main__':
     while last_datetime < datetime.now():
         data = get_daily_data(session, session_response.get('token'),
                               'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
-                              datetime(2023, 11, 3), proxies
+                              last_datetime, proxies
                               )
         json_response = json_decode(data)
         target_file_segments[-2]= last_datetime.strftime('%Y-%m-%d')
