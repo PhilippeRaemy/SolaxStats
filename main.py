@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import json
 import os
 
+import click
 import requests
 
 user_name = os.environ['USER_NAME']
@@ -77,8 +78,8 @@ def get_daily_data(session, token, url, date: datetime, proxies):
     print(len(payload))
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
-pi
-if __name__ == '__main__':
+@click.command('extract')
+def extract():
     # fiddler proxy
     http_proxy = "http://127.0.0.1:8888"
     https_proxy = "http://127.0.0.1:8888"
@@ -125,3 +126,6 @@ if __name__ == '__main__':
         last_datetime += timedelta(days=1)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
+# if __name__ == '__main__':
+#     click.cli()
