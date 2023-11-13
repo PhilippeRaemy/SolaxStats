@@ -77,7 +77,7 @@ def get_daily_data(session, token, url, date: datetime, proxies):
     print(len(payload))
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
-
+pi
 if __name__ == '__main__':
     # fiddler proxy
     http_proxy = "http://127.0.0.1:8888"
