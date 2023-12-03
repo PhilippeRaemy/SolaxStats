@@ -1,5 +1,5 @@
 from click.testing import CliRunner
-from solax import extract
+from solax_extract import extract
 
 def test_extract():
   runner = CliRunner()
