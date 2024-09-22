@@ -11,7 +11,22 @@ site_password = os.environ['SITE_PASSWORD']
 config_password = os.environ['CONFIG_PASSWORD']
 encrypted_password = os.environ['ENCRYPTED_PASSWORD']
 site_id = os.environ['SITE_ID']
-local_file = os.environ['SOLAX_STATS_FILE']
+local_file = os.path.join(
+    os.environ.get('SOLAX_STATS_FOLDER', os.path.dirname(__file__)),
+    os.environ.get('SOLAX_STATS_FILE', 'solax.json'))
+
+with open(local_file, 'r') as cgf:
+    config = json.loads(cgf.read())
+
+    user_name = config.get('USER_NAME')
+    site_password = config.get('SITE_PASSWORD')
+    config_password = config.get('CONFIG_PASSWORD')
+    encrypted_password = config.get('ENCRYPTED_PASSWORD')
+    site_id = config.get('SITE_ID')
+    solax_stats_folder = config.get('SOLAX_STATS_FOLDER')
+    solax_stats_file = config.get('SOLAX_STATS_FILE')
+
+target_file_pattern = re.compile('.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json$')
 
 
 def login(url, proxies) -> requests.Session:
@@ -78,6 +93,12 @@ def get_daily_data(session, token, url, date: datetime, proxies):
     print(len(payload))
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
+
+@click.command('compress')
+def compress:
+    for jfile in os.listdir(solax_stats_folder)
+
+
 @click.command('extract')
 def extract():
     # fiddler proxy
@@ -96,18 +117,13 @@ def extract():
         print(ex)
         stats = []
 
-    target_folder = os.path.dirname(local_file)
-    os.makedirs(target_folder, exist_ok=True)
-    target_file = local_file[len(target_folder + os.pathsep):]
-    target_file_segments = target_file.split('.')
-    target_file_segments.insert(-1, '(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
-    target_file_pattern = re.compile('.'.join(target_file_segments))
+    os.makedirs(solax_stats_folder, exist_ok=True)
 
     try:
         last_datetime = max(datetime(int(di['yyyy']), int(di['mm']), int(di['dd']))
                             for di in (ma.groupdict()
                                        for ma in (target_file_pattern.match(fi)
-                                                  for fi in os.listdir(target_folder)) if ma)
+                                                  for fi in os.listdir(solax_stats_folder)) if ma)
                             )
     except:
         last_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
@@ -119,8 +135,8 @@ def extract():
                               last_datetime, proxies
                               )
         json_response = json_decode(data)
-        target_file_segments[-2]= last_datetime.strftime('%Y-%m-%d')
-        with open(os.path.join(target_folder, '.'.join(target_file_segments)), 'w') as fi:
+        target_file_segments[-2] = last_datetime.strftime('%Y-%m-%d')
+        with open(os.path.join(solax_file_folder, '.'.join(target_file_segments)), 'w') as fi:
             fi.write(json.dumps(json_response, indent=2))
 
         last_datetime += timedelta(days=1)
