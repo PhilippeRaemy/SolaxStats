@@ -73,7 +73,7 @@ def json_decode(response):
 # Press the green button in the gutter to run the script.
 def get_daily_data(session, token, url, date: datetime, proxies):
     payload = {
-        'siteId': os.environ['SITE_ID'],
+        'siteId': site_id,
         'time': date.strftime('%Y-%m-%d')
     }
     headers = {
@@ -102,13 +102,13 @@ def get_daily_data(session, token, url, date: datetime, proxies):
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
 
-@click.command('compress')
+@extract.command('compress')
 def compress():
     for jfile in os.listdir(solax_stats_folder):
         pass
 
 
-@click.command('history')
+@extract.command('history')
 def history():
     # fiddler proxy
     http_proxy = "http://127.0.0.1:8888"
