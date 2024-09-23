@@ -6,11 +6,11 @@ import os
 import click
 import requests
 
-user_name = os.environ['USER_NAME']
-site_password = os.environ['SITE_PASSWORD']
-config_password = os.environ['CONFIG_PASSWORD']
-encrypted_password = os.environ['ENCRYPTED_PASSWORD']
-site_id = os.environ['SITE_ID']
+user_name = os.environ.get('USER_NAME')
+site_password = os.environ.get('SITE_PASSWORD')
+config_password = os.environ.get('CONFIG_PASSWORD')
+encrypted_password = os.environ.get('ENCRYPTED_PASSWORD')
+site_id = os.environ.get('SITE_ID')
 local_file = os.path.join(
     os.environ.get('SOLAX_STATS_FOLDER', os.path.dirname(__file__)),
     os.environ.get('SOLAX_STATS_FILE', 'solax.json'))
@@ -31,11 +31,11 @@ target_file_pattern = re.compile('.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).js
 @click.group()
 @click.version_option()
 def cli():
-    """Handle pictures from phone via FTP"""
+    """Handles solax inverter stats"""
 
 @cli.group()
 def extract():
-    """FTP operations"""
+    """Stats retrieval and basic aggregations"""
 
 def login(url, proxies, user_name, encrypted_password) -> requests.Session:
     headers = {
@@ -108,8 +108,8 @@ def compress():
         pass
 
 
-@click.command('extract')
-def extract():
+@click.command('history')
+def history():
     # fiddler proxy
     http_proxy = "http://127.0.0.1:8888"
     https_proxy = "http://127.0.0.1:8888"
@@ -133,26 +133,27 @@ def extract():
     target_file_pattern = re.compile('.'.join(target_file_segments))
 
     try:
-        last_datetime = max(datetime(int(di['yyyy']), int(di['mm']), int(di['dd']))
+        last_json_datetime = max(datetime(int(di['yyyy']), int(di['mm']), int(di['dd']))
                             for di in (ma.groupdict()
                                        for ma in (target_file_pattern.match(fi)
                                                   for fi in os.listdir(solax_stats_folder)) if ma)
                             )
     except:
-        last_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
+        last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
+
     session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies,
                                       user_name, encrypted_password)
-    while last_datetime < datetime.now():
+    while last_json_datetime < datetime.now():
         data = get_daily_data(session, session_response.get('token'),
                               'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
-                              last_datetime, proxies
+                              last_json_datetime, proxies
                               )
         json_response = json_decode(data)
-        target_file_segments[-2] = last_datetime.strftime('%Y-%m-%d')
+        target_file_segments[-2] = last_json_datetime.strftime('%Y-%m-%d')
         with open(os.path.join(solax_stats_folder, '.'.join(target_file_segments)), 'w') as fi:
             fi.write(json.dumps(json_response, indent=2))
 
-        last_datetime += timedelta(days=1)
+        last_json_datetime += timedelta(days=1)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
 
