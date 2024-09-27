@@ -7,14 +7,14 @@ def cli():
 
 @cli.group()
 def configure():
-    pass
+    """configure connectivity"""
 
-@configure()
+@configure.command("show")
 def show():
     print('not implemented yet')
 
 
-@configure()
+@configure.command("edit")
 def edit():
     print('not implemented yet')
 
