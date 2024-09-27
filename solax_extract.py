@@ -106,24 +106,6 @@ def get_daily_data(session, token, url, date: datetime, proxies):
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
 
-@extract.command('compress')
-def compress():
-    """Compress json files into feather"""
-    jfile_re = re.compile(r'.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json')
-    for jfile, feather_file in (
-            (
-                    os.path.join(solax_stats_folder, fi),
-                    os.path.join(solax_stats_folder, fi.replace('.json', '.feather'))
-            )
-            for fi in os.listdir(solax_stats_folder) if jfile_re.match(fi)):
-
-        if not os.path.exists(feather_file):
-            print(f'read {jfile}')
-            with open(jfile, 'r') as fi:
-                df: pd.DataFrame = pd.DataFrame(json.loads(fi.read()))
-                df.to_feather(feather_file)
-                print(f'wrote {feather_file}')
-
 
 @extract.command('history')
 def history():
