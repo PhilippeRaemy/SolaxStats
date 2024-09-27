@@ -2,6 +2,7 @@ import re
 from datetime import datetime, timedelta
 import json
 import os
+import pandas as pd
 
 import click
 import requests
@@ -28,14 +29,17 @@ with open(local_file, 'r') as cgf:
 
 target_file_pattern = re.compile('.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json$')
 
+
 @click.group()
 @click.version_option()
 def cli():
     """Handles solax inverter stats"""
 
+
 @cli.group()
 def extract():
     """Stats retrieval and basic aggregations"""
+
 
 def login(url, proxies, user_name, encrypted_password) -> requests.Session:
     headers = {
@@ -105,8 +109,20 @@ def get_daily_data(session, token, url, date: datetime, proxies):
 @extract.command('compress')
 def compress():
     """Compress json files into feather"""
-    for jfile in os.listdir(solax_stats_folder):
-        print(jfile)
+    jfile_re = re.compile(r'.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json')
+    for jfile, feather_file in (
+            (
+                    os.path.join(solax_stats_folder, fi),
+                    os.path.join(solax_stats_folder, fi.replace('.json', '.feather'))
+            )
+            for fi in os.listdir(solax_stats_folder) if jfile_re.match(fi)):
+
+        if not os.path.exists(feather_file):
+            print(f'read {jfile}')
+            with open(jfile, 'r') as fi:
+                df: pd.DataFrame = pd.DataFrame(json.loads(fi.read()))
+                df.to_feather(feather_file)
+                print(f'wrote {feather_file}')
 
 
 @extract.command('history')
@@ -135,10 +151,10 @@ def history():
 
     try:
         last_json_datetime = max(datetime(int(di['yyyy']), int(di['mm']), int(di['dd']))
-                            for di in (ma.groupdict()
-                                       for ma in (target_file_pattern.match(fi)
-                                                  for fi in os.listdir(solax_stats_folder)) if ma)
-                            )
+                                 for di in (ma.groupdict()
+                                            for ma in (target_file_pattern.match(fi)
+                                                       for fi in os.listdir(solax_stats_folder)) if ma)
+                                 )
     except:
         last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
@@ -155,6 +171,7 @@ def history():
             fi.write(json.dumps(json_response, indent=2))
 
         last_json_datetime += timedelta(days=1)
+
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
 
