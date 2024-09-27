@@ -42,33 +42,33 @@ def show(day: str, uom: str):
             )
             for fi in os.listdir(solax_extract.solax_stats_folder) if jfile_re.match(fi)):
 
-        if not os.path.exists(feather_file):
-            print(f'read {jfile}')
-            with open(jfile, 'r') as fi:
-                raw_data = json.loads(fi.read())
-                data = raw_data.get('object')
-                df: pd.DataFrame = pd.DataFrame(data)
-                timestamp_columns = ['year', 'month', 'day', 'hour', 'minute']
-                df['timestamp'] = pd.to_datetime(df[timestamp_columns])
-                to_be_deleted = to_be_deleted + timestamp_columns
-                df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
+        # if not os.path.exists(feather_file):
+        print(f'read {jfile}')
+        with open(jfile, 'r') as fi:
+            raw_data = json.loads(fi.read())
+            data = raw_data.get('object')
+            df: pd.DataFrame = pd.DataFrame(data)
+            timestamp_columns = ['year', 'month', 'day', 'hour', 'minute']
+            df['timestamp'] = pd.to_datetime(df[timestamp_columns])
+            to_be_deleted = to_be_deleted + timestamp_columns
+            df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
 
-                if uom == 'W':
-                    pass
-                elif uom == 'kW':
-                    for power_column in power_columns:
-                        df[power_column] = df[power_column] / 1000.0
-                elif uom == 'kWh':
-                    for power_column in power_columns:
-                        df[power_column] = df[power_column] * df['elapsed_time'] / 3600.0 / 1000.0
-                else:
-                    raise ValueError(f'Invalid unit of measure :{uom}')
+            if uom == 'W':
+                pass
+            elif uom == 'kW':
+                for power_column in power_columns:
+                    df[power_column] = df[power_column] / 1000.0
+            elif uom == 'kWh':
+                for power_column in power_columns:
+                    df[power_column] = df[power_column] * df['elapsed_time'] / 3600.0 / 1000.0
+            else:
+                raise ValueError(f'Invalid unit of measure :{uom}')
 
-                df.drop(columns=to_be_deleted, inplace=True)
+            df.drop(columns=to_be_deleted, inplace=True)
 
-                print(df.to_string(sparsify=False))
-                # df.to_feather(feather_file)
-                # print(f'wrote {feather_file}')
+            print(df.to_string(sparsify=False))
+            # df.to_feather(feather_file)
+            # print(f'wrote {feather_file}')
         fig, ax = plt.subplots()             # Create a figure containing a single Axes.
         for power_column in power_columns:
             ax.plot(df['timestamp'], df[power_column], label=power_column)  # Plot some data on the Axes.
@@ -76,8 +76,8 @@ def show(day: str, uom: str):
         ax.set_ylabel(uom)
         ax.set_title('Solaire Sillons')
         ax.legend()
-
         plt.show()
+
 
 @analyse.command("edit")
 def edit():
