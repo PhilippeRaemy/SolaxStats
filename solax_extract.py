@@ -104,8 +104,9 @@ def get_daily_data(session, token, url, date: datetime, proxies):
 
 @extract.command('compress')
 def compress():
+    """Compress json files into feather"""
     for jfile in os.listdir(solax_stats_folder):
-        pass
+        print(jfile)
 
 
 @extract.command('history')
