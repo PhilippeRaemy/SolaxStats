@@ -20,7 +20,19 @@ def cli():
 
 @cli.group()
 def analyse():
-    """configure connectivity"""
+    """Various analysis functions"""
+
+"""
+We're interested in:
+    * Energy produced PV
+    * Energy produced Battery
+    * Energy consumed total
+    * Grid Purchases in MWh
+    * Grid sales in MWh
+    * Count of Battery cycles : sum (abs battery variation) / 2
+... by hour over a period of time (eventually peak/offpeak is enough
+"""
+
 
 
 @analyse.command("show")
