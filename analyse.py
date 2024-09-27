@@ -4,6 +4,9 @@ import re
 
 import pandas as pd
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 import solax_extract
 import click
 from datetime import datetime
@@ -59,14 +62,22 @@ def show(day: str, uom: str):
                     for power_column in power_columns:
                         df[power_column] = df[power_column] * df['elapsed_time'] / 3600.0 / 1000.0
                 else:
-                    raise ValueError(f'Invalie unit of measure :{uom}')
+                    raise ValueError(f'Invalid unit of measure :{uom}')
 
                 df.drop(columns=to_be_deleted, inplace=True)
 
                 print(df.to_string(sparsify=False))
                 # df.to_feather(feather_file)
                 # print(f'wrote {feather_file}')
+        fig, ax = plt.subplots()             # Create a figure containing a single Axes.
+        for power_column in power_columns:
+            ax.plot(df['timestamp'], df[power_column], label=power_column)  # Plot some data on the Axes.
+        ax.set_xlabel(day)
+        ax.set_ylabel(uom)
+        ax.set_title('Solaire Sillons')
+        ax.legend()
 
+        plt.show()
 
 @analyse.command("edit")
 def edit():
