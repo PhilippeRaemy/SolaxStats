@@ -106,7 +106,6 @@ def get_daily_data(session, token, url, date: datetime, proxies):
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
 
-
 @extract.command('history')
 def history():
     # fiddler proxy
@@ -126,7 +125,7 @@ def history():
         stats = []
 
     os.makedirs(solax_stats_folder, exist_ok=True)
-    target_file = local_file[len(solax_stats_folder + os.pathsep):]
+    target_file = solax_stats_file
     target_file_segments = target_file.split('.')
     target_file_segments.insert(-1, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
     target_file_pattern = re.compile('.'.join(target_file_segments))
@@ -149,8 +148,14 @@ def history():
                               )
         json_response = json_decode(data)
         target_file_segments[-2] = last_json_datetime.strftime('%Y-%m-%d')
-        with open(os.path.join(solax_stats_folder, '.'.join(target_file_segments)), 'w') as fi:
+        json_file = os.path.join(solax_stats_folder, '.'.join(target_file_segments))
+        with open(json_file, 'w') as fi:
             fi.write(json.dumps(json_response, indent=2))
+
+        df: pd.DataFrame = pd.DataFrame(json_response.get('object'))
+        feather_file = json_file.replace('.json', '.feather')
+        df.to_feather(feather_file)
+        print(f'wrote {feather_file}')
 
         last_json_datetime += timedelta(days=1)
 

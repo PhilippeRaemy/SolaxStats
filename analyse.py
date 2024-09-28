@@ -103,6 +103,7 @@ def show(day: str, month: str, year: str, from_: str, to: str, uom: str):
             print(f'read {feather_file}')
             df = pd.read_feather(feather_file)
         else:
+            print('Some feather file missing. Run solax.exe extract compress first.')
             print(f'read {jfile}')
             with open(jfile, 'r') as fi:
                 raw_data = json.loads(fi.read())
