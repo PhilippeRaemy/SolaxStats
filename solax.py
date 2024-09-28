@@ -12,3 +12,5 @@ cli.add_command(solax_extract.extract)
 cli.add_command(configure.configure)
 cli.add_command(analyse.analyse)
 
+if __name__ == '__main__':
+    cli()
