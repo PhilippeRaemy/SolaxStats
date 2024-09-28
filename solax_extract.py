@@ -7,27 +7,7 @@ import pandas as pd
 import click
 import requests
 
-user_name = os.environ.get('USER_NAME')
-site_password = os.environ.get('SITE_PASSWORD')
-config_password = os.environ.get('CONFIG_PASSWORD')
-encrypted_password = os.environ.get('ENCRYPTED_PASSWORD')
-site_id = os.environ.get('SITE_ID')
-local_file = os.path.join(
-    os.environ.get('SOLAX_STATS_FOLDER', os.path.dirname(__file__)),
-    os.environ.get('SOLAX_STATS_FILE', 'solax.json'))
-
-with open(local_file, 'r') as cgf:
-    config = json.loads(cgf.read())
-
-    user_name = config.get('USER_NAME')
-    site_password = config.get('SITE_PASSWORD')
-    config_password = config.get('CONFIG_PASSWORD')
-    encrypted_password = config.get('ENCRYPTED_PASSWORD')
-    site_id = config.get('SITE_ID')
-    solax_stats_folder = config.get('SOLAX_STATS_FOLDER')
-    solax_stats_file = config.get('SOLAX_STATS_FILE')
-
-target_file_pattern = re.compile('.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json$')
+import configure
 
 
 @click.group()
@@ -77,7 +57,7 @@ def json_decode(response):
 # Press the green button in the gutter to run the script.
 def get_daily_data(session, token, url, date: datetime, proxies):
     payload = {
-        'siteId': site_id,
+        'siteId': configure.site_id,
         'time': date.strftime('%Y-%m-%d')
     }
     headers = {
@@ -112,20 +92,22 @@ def history():
     http_proxy = "http://127.0.0.1:8888"
     https_proxy = "http://127.0.0.1:8888"
 
+
     proxies = {
         "http": http_proxy,
         "https": https_proxy,
     }
 
     try:
-        with open(local_file, 'r') as stats_file:
+        with open(configure.local_file, 'r') as stats_file:
             stats = json.loads(stats_file.read())
     except Exception as ex:
         print(ex)
         stats = []
 
+    solax_stats_folder = configure.solax_stats_folder
     os.makedirs(solax_stats_folder, exist_ok=True)
-    target_file = solax_stats_file
+    target_file = configure.solax_stats_file
     target_file_segments = target_file.split('.')
     target_file_segments.insert(-1, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
     target_file_pattern = re.compile('.'.join(target_file_segments))
@@ -140,7 +122,7 @@ def history():
         last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
     session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies,
-                                      user_name, encrypted_password)
+                                      configure.user_name, configure.encrypted_password)
     while last_json_datetime < datetime.now():
         data = get_daily_data(session, session_response.get('token'),
                               'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
@@ -163,11 +145,13 @@ def history():
 @extract.command('compress')
 @click.option('--force', is_flag=True, default=False)
 def compress(force):
-    target_file = solax_stats_file
+    config = configure.get_config()
+    target_file = config['solax_stats_file']
     target_file_segments = target_file.split('.')
     target_file_segments.insert(-1, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
     target_file_pattern = re.compile('.'.join(target_file_segments))
     count = 0
+    solax_stats_folder = config['solax_stats_folder']
     for fi in os.listdir(solax_stats_folder):
         if not target_file_pattern.match(fi):
             continue
