@@ -104,12 +104,7 @@ def show(day: str, month: str, year: str, from_: str, to: str, uom: str):
             df = pd.read_feather(feather_file)
         else:
             print('Some feather file missing. Run solax.exe extract compress first.')
-            print(f'read {jfile}')
-            with open(jfile, 'r') as fi:
-                raw_data = json.loads(fi.read())
-                df: pd.DataFrame = pd.DataFrame(raw_data.get('object'))
-            df.to_feather(feather_file)
-            print(f'wrote {feather_file}')
+            return
 
         timestamp_columns = ['year', 'month', 'day', 'hour', 'minute']
         df['timestamp'] = pd.to_datetime(df[timestamp_columns])

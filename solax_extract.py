@@ -160,7 +160,32 @@ def history():
         last_json_datetime += timedelta(days=1)
 
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+@extract.command('compress')
+@click.option('--force', is_flag=True, default=False)
+def compress(force):
+    target_file = solax_stats_file
+    target_file_segments = target_file.split('.')
+    target_file_segments.insert(-1, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
+    target_file_pattern = re.compile('.'.join(target_file_segments))
+    count = 0
+    for fi in os.listdir(solax_stats_folder):
+        if not target_file_pattern.match(fi):
+            continue
+        jfile = os.path.join(solax_stats_folder, fi)
+        feather_file = jfile.replace('.json', '.feather')
+
+        if not force and os.path.exists(feather_file):
+            continue
+        print(f'read {jfile}')
+        with open(jfile, 'r') as fi:
+            raw_data = json.loads(fi.read())
+            df: pd.DataFrame = pd.DataFrame(raw_data.get('object'))
+        df.to_feather(feather_file)
+        print(f'wrote {feather_file}')
+        count += 1
+
+    print(f'compressed {count} json files into feather')
+
 
 if __name__ == '__main__':
     click.cli()
