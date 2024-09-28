@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dateutil.relativedelta import relativedelta
 
+import configure
 import solax_extract
 import click
 from datetime import datetime
@@ -81,8 +82,9 @@ def show(day: str, month: str, year: str, from_: str, to: str, uom: str):
                      'pvPower', 'gridpower', 'feedinpower', 'EPSPower', 'epspower', 'EpsActivePower',
                      'consumeEnergyMeter2', 'feedinPowerMeter2', 'Meter2ComState', 'relayPower', 'batPower1']
 
-    jfile_re = re.compile(r'.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json')
+    jfile_re = configure.target_file_pattern
     dfs = []
+    solax_stats_folder = configure.solax_stats_folder
     for jfile, feather_file, value_date in (
             (jfile,
              feather_file,
@@ -91,10 +93,10 @@ def show(day: str, month: str, year: str, from_: str, to: str, uom: str):
                  int(jfile_ma.groupdict()['mm']),
                  int(jfile_ma.groupdict()['dd'])))
             for jfile, feather_file, jfile_ma in (
-            (os.path.join(solax_extract.solax_stats_folder, fi),
-             os.path.join(solax_extract.solax_stats_folder, fi.replace('.json', '.feather')),
+            (os.path.join(solax_stats_folder, fi),
+             os.path.join(solax_stats_folder, fi.replace('.json', '.feather')),
              jfile_re.match(fi))
-            for fi in os.listdir(solax_extract.solax_stats_folder)) if jfile_ma
+            for fi in os.listdir(solax_stats_folder)) if jfile_ma
     ):
         if not (value_date >= date_from and value_date <= date_to):
             continue
