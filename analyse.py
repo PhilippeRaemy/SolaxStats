@@ -38,44 +38,41 @@ We're interested in:
 
 
 @analyse.command("show")
-@click.option('--day', help='iso date yyyy-MM-dd', required=False, default=None, type=str)
-@click.option('--month', help='iso month yyyy-MM', required=False, default=None, type=str)
-@click.option('--year', help='iso year yyyy', required=False, default=None, type=str)
-@click.option('--from', 'from_', help='iso date yyyy-MM-dd', required=False, default=None, type=str)
-@click.option('--to', help='iso date yyyy-MM-dd', required=False, default=None, type=str)
-@click.option('--uom', help='Unit of measure. Available values are W, kW and KWh',
+@click.option('--period', '-p', required=True, type=str,
+              help='Report period. A day can be specified as yyyy-MM-dd, a month as yyyy-MM, a year as yyyy or a custom range as yyyy-MM-dd..yyyy-MM-dd')
+@click.option('--report', '-r', help='Report type', required=False, default='Raw',
+              type=click.Choice(['Raw', 'Financial', 'Battery', 'Panels'], case_sensitive=False))
+@click.option('--by', '-by', help='Report type', required=False, default='5min',
+              type=click.Choice(['5min', 'Hour', 'Peak', 'Day', 'Month', 'Quarter', 'Year'], case_sensitive=False))
+@click.option('--uom', '-u', help='Unit of measure. Available values are W, kW and KWh',
               type=click.Choice(['W', 'kW', 'kWh'], case_sensitive=False), default='kW')
-def show(day: str, month: str, year: str, from_: str, to: str, uom: str):
+def show(report: str, by: str, period: str, uom: str):
     """read the data for a range of days and display"""
-    date_from = datetime(2000, 1, 1)
-    date_to = datetime(2100, 1, 1)
 
-    if sum([
-        1 if day else 0,
-        1 if month else 0,
-        1 if year else 0,
-        1 if from_ or to else 0
-    ]) > 1:
-        print("Cannot specify more than one type of date range option.")
+    print(period)
+    period_ma = re.match('(?P<from>(\d{4}((-(?P<mm>\d\d))?(-(?P<dd>\d\d))?)?))(..(?P<to>\d{4}-\d\d-\d\d))?$', period)
+    print(period_ma)
+    if not period_ma:
+        print("Invalid period specified.")
         return
-    if day:
-        date_from = date_to = datetime.strptime(day, '%Y-%m-%d')
-        xlabel = day
-    if month:
-        date_from = datetime.strptime(month + '-01', '%Y-%m-%d')
-        date_to = date_from + relativedelta(months=1, days=-1)
-        xlabel = month
-    if year:
-        date_from = datetime.strptime(year + '-01-01', '%Y-%m-%d')
-        date_to = date_from + relativedelta(years=1, days=-1)
-        xlabel = year
-    if from_:
-        date_from = datetime.strptime(from_, '%Y-%m-%d')
-    if to:
-        date_to = datetime.strptime(to, '%Y-%m-%d')
+    match_dict = period_ma.groupdict()
 
-    if from_ or to:
-        xlabel = date_from.strftime('%Y-%m-%d') + '..' + date_to.strftime('%Y-%m-%d')
+    from_ = match_dict.get('from')
+    to = match_dict.get('to')
+    mm = match_dict.get('mm')
+    dd = match_dict.get('dd')
+
+    if to:
+        date_from = datetime.strptime(from_, '%Y-%m-%d')
+        date_to = datetime.strptime(to, '%Y-%m-%d')
+    elif dd:
+        date_from = date_to = datetime.strptime(from_, '%Y-%m-%d')
+    elif mm:
+        date_from = datetime.strptime(from_ + '-01', '%Y-%m-%d')
+        date_to = date_from + relativedelta(months=1, days=-1)
+    else:  # year:
+        date_from = datetime.strptime(from_ + '-01-01', '%Y-%m-%d')
+        date_to = date_from + relativedelta(years=1, days=-1)
     to_be_deleted = ['inverterSn', 'powerdc', 'uploadTimeValue', 'fiveMinuteVal', 'powerdc3', 'powerdc4']
     power_columns = ['powerdc1', 'powerdc2',
                      'pac1', 'pac2', 'pac3',
@@ -135,7 +132,7 @@ def show(day: str, month: str, year: str, from_: str, to: str, uom: str):
     for power_column in power_columns:
         ax.plot(df['timestamp'], df[power_column], label=power_column)  # Plot some data on the Axes.
 
-    ax.set_xlabel(xlabel)
+    ax.set_xlabel(period)
     ax.set_ylabel(uom)
     ax.set_title('Solaire Sillons')
     ax.legend()
