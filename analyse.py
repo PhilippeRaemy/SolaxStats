@@ -86,9 +86,9 @@ def show(report: str, by: str, period: str, uom: str):
             (jfile,
              feather_file,
              datetime(
-                 int(jfile_ma.groupdict()['yyyy']),
-                 int(jfile_ma.groupdict()['mm']),
-                 int(jfile_ma.groupdict()['dd'])))
+                 int(jfile_ma.groupdict()['year']),
+                 int(jfile_ma.groupdict()['month']),
+                 int(jfile_ma.groupdict()['day'])))
             for jfile, feather_file, jfile_ma in (
             (os.path.join(solax_stats_folder, fi),
              os.path.join(solax_stats_folder, fi.replace('.json', '.feather')),

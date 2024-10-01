@@ -20,7 +20,7 @@ def read_config():
         'site_id': os.environ.get('SITE_ID'),
         'solax_stats_folder': solax_stats_folder,
         'solax_stats_file': solax_stats_file,
-        'target_file_pattern': re.compile('.*(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d).json$'),
+        'target_file_pattern': re.compile('.*(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d).json$'),
         'local_file': local_file
     }
 
