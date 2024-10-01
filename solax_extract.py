@@ -2,6 +2,8 @@ import re
 from datetime import datetime, timedelta
 import json
 import os
+from distutils.command.upload import upload
+
 import pandas as pd
 
 import click
@@ -23,21 +25,21 @@ def extract():
 
 def login(url, proxies, user_name, encrypted_password) -> requests.Session:
     headers = {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-        'Connection': 'keep-alive',
-        'Content-Length': '81',
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'Host': 'www.solaxcloud.com',
-        'Origin': 'https://www.solaxcloud.com',
-        'Sec-Fetch-Dest': None,
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
-        'lang': 'en_US',
-        'sec-ch-ua': '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
-        'sec-ch-ua-mobile': '?0',
+        'Accept'            : 'application/json, text/plain, */*',
+        'Accept-Encoding'   : 'gzip, deflate, br',
+        'Accept-Language'   : 'en-US,en;q=0.9,fr;q=0.8',
+        'Connection'        : 'keep-alive',
+        'Content-Length'    : '81',
+        'Content-Type'      : 'application/x-www-form-urlencoded;charset=UTF-8',
+        'Host'              : 'www.solaxcloud.com',
+        'Origin'            : 'https://www.solaxcloud.com',
+        'Sec-Fetch-Dest'    : None,
+        'Sec-Fetch-Mode'    : 'cors',
+        'Sec-Fetch-Site'    : 'same-origin',
+        'User-Agent'        : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+        'lang'              : 'en_US',
+        'sec-ch-ua'         : '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+        'sec-ch-ua-mobile'  : '?0',
         'sec-ch-ua-platform': '"Windows"',
     }
 
@@ -58,27 +60,27 @@ def json_decode(response):
 def get_daily_data(session, token, url, date: datetime, proxies):
     payload = {
         'siteId': configure.site_id,
-        'time': date.strftime('%Y-%m-%d')
+        'time'  : date.strftime('%Y-%m-%d')
     }
     headers = {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-        'Connection': 'keep-alive',
-        'Content-Length': str(len(payload)),
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'Host': 'www.solaxcloud.com',
-        'Origin': 'https://www.solaxcloud.com',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
-        'lang': 'en_US',
-        'sec-ch-ua': '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
-        'sec-ch-ua-mobile': '?0',
+        'Accept'            : 'application/json, text/plain, */*',
+        'Accept-Encoding'   : 'gzip, deflate, br',
+        'Accept-Language'   : 'en-US,en;q=0.9,fr;q=0.8',
+        'Connection'        : 'keep-alive',
+        'Content-Length'    : str(len(payload)),
+        'Content-Type'      : 'application/x-www-form-urlencoded;charset=UTF-8',
+        'Host'              : 'www.solaxcloud.com',
+        'Origin'            : 'https://www.solaxcloud.com',
+        'Sec-Fetch-Dest'    : 'empty',
+        'Sec-Fetch-Mode'    : 'cors',
+        'Sec-Fetch-Site'    : 'same-origin',
+        'User-Agent'        : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+        'lang'              : 'en_US',
+        'sec-ch-ua'         : '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+        'sec-ch-ua-mobile'  : '?0',
         'sec-ch-ua-platform': '"Windows"',
-        'token': token,
-        'version': 'blue',
+        'token'             : token,
+        'version'           : 'blue',
     }
     print(payload)
     print(json.dumps(headers, indent=2))
@@ -92,9 +94,8 @@ def history():
     http_proxy = "http://127.0.0.1:8888"
     https_proxy = "http://127.0.0.1:8888"
 
-
     proxies = {
-        "http": http_proxy,
+        "http" : http_proxy,
         "https": https_proxy,
     }
 
@@ -113,7 +114,7 @@ def history():
     target_file_pattern = re.compile('.'.join(target_file_segments))
 
     try:
-        last_json_datetime = max(datetime(int(di['yyyy']), int(di['mm']), int(di['dd']))
+        last_json_datetime = max(datetime(int(di['year']), int(di['month']), int(di['day']))
                                  for di in (ma.groupdict()
                                             for ma in (target_file_pattern.match(fi)
                                                        for fi in os.listdir(solax_stats_folder)) if ma)
@@ -134,12 +135,32 @@ def history():
         with open(json_file, 'w') as fi:
             fi.write(json.dumps(json_response, indent=2))
 
+        json_to_feather(json_file, json_response.get('object'))
         df: pd.DataFrame = pd.DataFrame(json_response.get('object'))
-        feather_file = json_file.replace('.json', '.feather')
-        df.to_feather(feather_file)
-        print(f'wrote {feather_file}')
 
         last_json_datetime += timedelta(days=1)
+
+
+def json_to_feather(json_file, data=None):
+    if not data:
+        print(f'read {json_file}')
+        with open(json_file, 'r') as fi:
+            data = json.loads(fi.read()).get('object')
+
+    df: pd.DataFrame = pd.DataFrame(data)
+    date_columns = ['year', 'month', 'day']
+    timestamp_columns = date_columns + ['hour', 'minute']
+    if [c for c in date_columns if c not in df.columns]:  # any timestamp column missing, happens in early files
+        ma = configure.target_file_pattern.match(json_file)
+        for c in date_columns:
+            df[c] = ma.groupdict[c]
+
+    df['timestamp'] = pd.to_datetime(df[timestamp_columns])
+    df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
+
+    feather_file = json_file.replace('.json', '.feather')
+    df.to_feather(feather_file)
+    print(f'wrote {feather_file}')
 
 
 @extract.command('compress')
@@ -155,17 +176,13 @@ def compress(force):
     for fi in os.listdir(solax_stats_folder):
         if not target_file_pattern.match(fi):
             continue
-        jfile = os.path.join(solax_stats_folder, fi)
-        feather_file = jfile.replace('.json', '.feather')
+        json_file = os.path.join(solax_stats_folder, fi)
+        feather_file = json_file.replace('.json', '.feather')
 
         if not force and os.path.exists(feather_file):
             continue
-        print(f'read {jfile}')
-        with open(jfile, 'r') as fi:
-            raw_data = json.loads(fi.read())
-            df: pd.DataFrame = pd.DataFrame(raw_data.get('object'))
-        df.to_feather(feather_file)
-        print(f'wrote {feather_file}')
+        json_to_feather(json_file)
+
         count += 1
 
     print(f'compressed {count} json files into feather')
