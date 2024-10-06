@@ -10,9 +10,12 @@ import pandas as pd
 
 import click
 import requests
+from numpy.ma.core import power
+from pandas import DataFrame
 from pyarrow.pandas_compat import dataframe_to_types
 
 import configure
+import schemas
 
 
 @click.group()
@@ -156,6 +159,8 @@ def json_to_feather(json_file, data=None):
 
     df['timestamp'] = pd.to_datetime(df[timestamp_columns])
     df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
+    for powerColumn in schemas.POWER_SCHEMA:
+        df[powerColumn + 'KWh'] = df[powerColumn] * df['elapsed_time'] / 3.6
 
     feather_file = json_file.replace('.json', '.feather')
     df.to_feather(feather_file)
@@ -181,6 +186,14 @@ def compress(force):
     print(f'compressed {count} json files into feather')
 
 
+def aggregate_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame:
+    df = pd.concat(dfs).groupby(grouping).agg({'elapsed_time': 'sum',
+                                               **{col: 'sum' for col in schemas.ENERGY_SCHEMA.energy_columns}})
+    for col in schemas.ENERGY_SCHEMA.power_columns:
+        df[col] = df['col' + 'KWh'] / df['elapse_time'] * 3.6
+    return df
+
+
 @extract.command('aggregate')
 @click.option('--granularity', '-f', help='Granularity of the aggregation', required=False, default='All',
               type=click.Choice(['All', 'Hourly', 'Daily', 'Monthly'], case_sensitive=False))
@@ -204,6 +217,21 @@ def aggregate(granularity, force):
     files = os.listdir(folder)
     max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
 
+    if granularity == 'All':
+        grouping = ['year', 'month', 'day', 'hour', 'minute']
+    if granularity == 'Hourly':
+        grouping = ['year', 'month', 'day', 'hour']
+    if granularity == 'Daily':
+        grouping = ['year', 'month', 'day']
+    if granularity == 'Monthly':
+        grouping = ['year', 'month']
+    elif granularity == 'Yearly':
+        if partition == 'Monthly':
+            raise ValueError(f'Cannot partition in {partition} for {granularity} granularity.')
+        grouping = ['year']
+    else:
+        raise ValueError(f'Invalid  granularity {granularity}.')
+
     previous_partition = ''
     dfs: List[pd.DataFrame] = []
     for fi in files:
@@ -212,13 +240,14 @@ def aggregate(granularity, force):
             continue
         current_partition = file_namer(fi)
         if previous_partition and current_partition != previous_partition:
-            pd.concat(dfs).to_feather(os.join(folder, previous_partition))
+            aggregate_impl(dfs, grouping).to_feather(os.join(folder, previous_partition))
             dfs = []
+            previous_partition = current_partition
         df = pd.read_feather(os.join(folder, fi))
         dfs.append(df)
 
     if previous_partition:
-        pd.concat(dfs).to_feather(os.join(folder, previous_partition))
+        aggregate_impl(dfs, grouping).to_feather(os.join(folder, previous_partition))
 
 
 if __name__ == '__main__':
