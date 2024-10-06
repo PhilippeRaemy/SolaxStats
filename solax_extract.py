@@ -3,11 +3,14 @@ from datetime import datetime, timedelta
 import json
 import os
 from distutils.command.upload import upload
+from turtledemo.sorting_animate import partition
+from typing import List, Tuple
 
 import pandas as pd
 
 import click
 import requests
+from pyarrow.pandas_compat import dataframe_to_types
 
 import configure
 
@@ -109,16 +112,12 @@ def history():
     solax_stats_folder = configure.solax_stats_folder
     os.makedirs(solax_stats_folder, exist_ok=True)
     target_file = configure.solax_stats_file
-    target_file_segments = target_file.split('.')
-    target_file_segments.insert(-1, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
-    target_file_pattern = re.compile('.'.join(target_file_segments))
+    target_file_pattern = configure.re_json
 
     try:
-        last_json_datetime = max(datetime(int(di['year']), int(di['month']), int(di['day']))
-                                 for di in (ma.groupdict()
-                                            for ma in (target_file_pattern.match(fi)
-                                                       for fi in os.listdir(solax_stats_folder)) if ma)
-                                 )
+        last_json_datetime = max(configure.date_from_filename(fi)
+                                 for fi in os.listdir(solax_stats_folder)
+                                 if configure.re_json.match(fi))
     except:
         last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
@@ -130,8 +129,8 @@ def history():
                               last_json_datetime, proxies
                               )
         json_response = json_decode(data)
-        target_file_segments[-2] = last_json_datetime.strftime('%Y-%m-%d')
-        json_file = os.path.join(solax_stats_folder, '.'.join(target_file_segments))
+
+        json_file = os.path.join(solax_stats_folder, configure.gen_json_d(last_json_datetime))
         with open(json_file, 'w') as fi:
             fi.write(json.dumps(json_response, indent=2))
 
@@ -166,17 +165,11 @@ def json_to_feather(json_file, data=None):
 @extract.command('compress')
 @click.option('--force', is_flag=True, default=False)
 def compress(force):
-    config = configure.get_config()
-    target_file = config['solax_stats_file']
-    target_file_segments = target_file.split('.')
-    target_file_segments.insert(-1, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)')
-    target_file_pattern = re.compile('.'.join(target_file_segments))
     count = 0
-    solax_stats_folder = config['solax_stats_folder']
-    for fi in os.listdir(solax_stats_folder):
-        if not target_file_pattern.match(fi):
+    for fi in os.listdir(configure.solax_stats_folder):
+        if not configure.re_json.match(fi):
             continue
-        json_file = os.path.join(solax_stats_folder, fi)
+        json_file = os.path.join(configure.solax_stats_folder, fi)
         feather_file = json_file.replace('.json', '.feather')
 
         if not force and os.path.exists(feather_file):
@@ -186,6 +179,46 @@ def compress(force):
         count += 1
 
     print(f'compressed {count} json files into feather')
+
+
+@extract.command('aggregate')
+@click.option('--granularity', '-f', help='Granularity of the aggregation', required=False, default='All',
+              type=click.Choice(['All', 'Hourly', 'Daily', 'Monthly'], case_sensitive=False))
+@click.option('--partition', '-f', help='Partitioning of the files', required=False, default='None',
+              type=click.Choice(['None', 'Monthly', 'Yearly'], case_sensitive=False))
+@click.option('--force', is_flag=True, default=False)
+def aggregate(granularity, force):
+    if partition == 'None':
+        feather_file_pattern = configure.re_feather_a
+        file_namer = configure.gen_feather_a
+    elif partition == 'Yearly':
+        feather_file_pattern = configure.re_feather_y
+        file_namer = configure.gen_feather_y
+    elif partition == 'Monthly':
+        feather_file_pattern = configure.re_feather_m
+        file_namer = configure.gen_feather_m
+    else:
+        raise ValueError(f'Invalid partition {partition}.')
+
+    folder = configure.solax_stats_folder
+    files = os.listdir(folder)
+    max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
+
+    previous_partition = ''
+    dfs: List[pd.DataFrame] = []
+    for fi in files:
+        ma = configure.re_feather_d.match(fi)
+        if not ma or fi < max_partition:
+            continue
+        current_partition = file_namer(fi)
+        if previous_partition and current_partition != previous_partition:
+            pd.concat(dfs).to_feather(os.join(folder, previous_partition))
+            dfs = []
+        df = pd.read_feather(os.join(folder, fi))
+        dfs.append(df)
+
+    if previous_partition:
+        pd.concat(dfs).to_feather(os.join(folder, previous_partition))
 
 
 if __name__ == '__main__':
