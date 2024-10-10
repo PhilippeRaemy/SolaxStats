@@ -240,6 +240,7 @@ def aggregate(granularity, partition, force):
         raise ValueError(f'Invalid  granularity {granularity}.')
 
     previous_partition = ''
+    current_partition = ''
     dfs: List[pd.DataFrame] = []
     for fi in files:
         ma = configure.re_feather_d.match(fi)
@@ -255,10 +256,11 @@ def aggregate(granularity, partition, force):
         df = pd.read_feather(os.path.join(folder, fi))
         dfs.append(df)
 
-    if previous_partition:
-        filename = os.path.join(folder, previous_partition)
+    if current_partition:
+        filename = os.path.join(folder, current_partition)
         aggregate_impl(dfs, grouping).to_feather(filename)
         print(f'saved {filename}')
+
 
 if __name__ == '__main__':
     click.cli()
