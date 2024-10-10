@@ -159,8 +159,11 @@ def json_to_feather(json_file, data=None):
 
     df['timestamp'] = pd.to_datetime(df[timestamp_columns])
     df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
-    for powerColumn in schemas.POWER_SCHEMA:
-        df[powerColumn + 'KWh'] = df[powerColumn] * df['elapsed_time'] / 3.6
+    for powerColumn in schemas.POWER_SCHEMA.power_columns:
+        if powerColumn in df.columns:
+            df[powerColumn + 'KWh'] = df[powerColumn] * df['elapsed_time'] / 3.6
+        else:
+            print("Missing column " + powerColumn)
 
     feather_file = json_file.replace('.json', '.feather')
     df.to_feather(feather_file)

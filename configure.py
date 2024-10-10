@@ -12,6 +12,8 @@ dated_file_pattern: re.compile('.*\.(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d
 
 
 def date_from_filename(filename):
+    if isinstance(filename, datetime):
+        return filename
     ma = dated_file_pattern.match(filename)
     if ma:
         di = ma.groupdict()
@@ -20,23 +22,23 @@ def date_from_filename(filename):
 
 
 def gen_json_d(filename):
-    return '.'.join(file_segments, [date_from_filename(filename).strftime('%Y-%m-%d'), 'json']),
+    return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y-%m-%d'), 'json'])
 
 
 def gen_feather_d(filename):
-    return '.'.join(file_segments, [date_from_filename(filename).strftime('%Y-%m-%d'), 'feather']),
+    return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y-%m-%d'), 'feather'])
 
 
 def gen_feather_m(filename):
-    return '.'.join(file_segments, [date_from_filename(filename).strftime('%Y-%m'), 'feather']),
+    return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y-%m'), 'feather'])
 
 
 def gen_feather_y(filename):
-    return '.'.join(file_segments, [date_from_filename(filename).strftime('%Y'), 'feather']),
+    return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y'), 'feather'])
 
 
 def gen_feather_a(filename):
-    return '.'.join(file_segments, ['feather'])
+    return '.'.join(file_segments + ['feather'])
 
 
 def read_config():
@@ -44,7 +46,7 @@ def read_config():
     solax_stats_file = os.environ.get('SOLAX_STATS_FILE', 'solax.json')
 
     def insert_re(segments, *args) -> re:
-        return re.compile('.'.join(segments + args))
+        return re.compile('.'.join(segments + list(args)))
 
     local_file = os.path.join(solax_stats_folder, solax_stats_file)
     file_segments = solax_stats_file.split('.')[:-1]
