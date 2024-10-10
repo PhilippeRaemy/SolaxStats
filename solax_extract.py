@@ -193,7 +193,8 @@ def aggregate_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame
     df = pd.concat(dfs).groupby(grouping).agg({'elapsed_time': 'sum',
                                                **{col: 'sum' for col in schemas.ENERGY_SCHEMA.energy_columns}})
     for col in schemas.ENERGY_SCHEMA.power_columns:
-        df[col] = df['col' + 'KWh'] / df['elapse_time'] * 3.6
+        if col in df.columns:
+            df[col] = df['col' + 'KWh'] / df['elapse_time'] * 3.6
     return df
 
 
@@ -246,15 +247,18 @@ def aggregate(granularity, partition, force):
             continue
         current_partition = file_namer(fi)
         if previous_partition and current_partition != previous_partition:
-            aggregate_impl(dfs, grouping).to_feather(os.join(folder, previous_partition))
+            filename = os.path.join(folder, previous_partition)
+            aggregate_impl(dfs, grouping).to_feather(filename)
+            print(f'saved {filename}')
             dfs = []
             previous_partition = current_partition
-        df = pd.read_feather(os.join(folder, fi))
+        df = pd.read_feather(os.path.join(folder, fi))
         dfs.append(df)
 
     if previous_partition:
-        aggregate_impl(dfs, grouping).to_feather(os.join(folder, previous_partition))
-
+        filename = os.path.join(folder, previous_partition)
+        aggregate_impl(dfs, grouping).to_feather(filename)
+        print(f'saved {filename}')
 
 if __name__ == '__main__':
     click.cli()
