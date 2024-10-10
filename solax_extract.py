@@ -203,30 +203,33 @@ def aggregate_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame
 @click.option('--partition', '-f', help='Partitioning of the files', required=False, default='None',
               type=click.Choice(['None', 'Monthly', 'Yearly'], case_sensitive=False))
 @click.option('--force', is_flag=True, default=False)
-def aggregate(granularity, force):
+def aggregate(granularity, partition, force):
     if partition == 'None':
         feather_file_pattern = configure.re_feather_a
-        file_namer = configure.gen_feather_a
+        file_namer = configure.gen_feather_a(granularity)
     elif partition == 'Yearly':
         feather_file_pattern = configure.re_feather_y
-        file_namer = configure.gen_feather_y
+        file_namer = configure.gen_feather_y(granularity)
     elif partition == 'Monthly':
         feather_file_pattern = configure.re_feather_m
-        file_namer = configure.gen_feather_m
+        file_namer = configure.gen_feather_m(granularity)
     else:
         raise ValueError(f'Invalid partition {partition}.')
 
     folder = configure.solax_stats_folder
     files = os.listdir(folder)
-    max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
+    try:
+        max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
+    except ValueError:
+        max_partition = ''
 
     if granularity == 'All':
         grouping = ['year', 'month', 'day', 'hour', 'minute']
-    if granularity == 'Hourly':
+    elif granularity == 'Hourly':
         grouping = ['year', 'month', 'day', 'hour']
-    if granularity == 'Daily':
+    elif granularity == 'Daily':
         grouping = ['year', 'month', 'day']
-    if granularity == 'Monthly':
+    elif granularity == 'Monthly':
         grouping = ['year', 'month']
     elif granularity == 'Yearly':
         if partition == 'Monthly':
