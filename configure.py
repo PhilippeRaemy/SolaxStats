@@ -8,7 +8,7 @@ from datetime import datetime
 import click
 
 file_segments = []
-dated_file_pattern: re.compile('.*\.(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d)\..*$')
+dated_file_pattern = re.compile('.*\.(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d)\..*$')
 
 
 def date_from_filename(filename):
@@ -29,16 +29,20 @@ def gen_feather_d(filename):
     return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y-%m-%d'), 'feather'])
 
 
-def gen_feather_m(filename):
-    return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y-%m'), 'feather'])
+def gen_feather_m(granularity):
+    def namer(filename):
+        return '.'.join(file_segments + [granularity, date_from_filename(filename).strftime('%Y-%m'), 'feather'])
+    return namer
 
+def gen_feather_y(granularity):
+    def namer(filename):
+        return '.'.join(file_segments + [granularity, date_from_filename(filename).strftime('%Y'), 'feather'])
+    return namer
 
-def gen_feather_y(filename):
-    return '.'.join(file_segments + [date_from_filename(filename).strftime('%Y'), 'feather'])
-
-
-def gen_feather_a(filename):
-    return '.'.join(file_segments + ['feather'])
+def gen_feather_a(granularity):
+    def namer(filename):
+        return '.'.join(file_segments + [granularity, 'feather'])
+    return namer
 
 
 def read_config():
