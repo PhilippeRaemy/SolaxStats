@@ -7,6 +7,9 @@ from turtledemo.sorting_animate import partition
 from typing import List, Tuple
 
 import pandas as pd
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import click
 import requests
@@ -16,6 +19,7 @@ from pyarrow.pandas_compat import dataframe_to_types
 
 import configure
 import schemas
+from clock_watch import clock_watch
 
 
 @click.group()
@@ -189,77 +193,101 @@ def compress(force):
     print(f'compressed {count} json files into feather')
 
 
-def aggregate_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame:
-    df = pd.concat(dfs).groupby(grouping).agg({'elapsed_time': 'sum',
-                                               **{col: 'sum' for col in schemas.ENERGY_SCHEMA.energy_columns}})
+def concat_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame:
+    df = (pd.concat((d  # .dropna(axis=1)
+                     for d in dfs
+                     if not d.empty), ignore_index=True, verify_integrity=False)
+          .groupby(grouping)
+          .agg({'elapsed_time': 'sum', **{col: 'sum' for col in schemas.ENERGY_SCHEMA.energy_columns}}))
     for col in schemas.ENERGY_SCHEMA.power_columns:
         if col in df.columns:
             df[col] = df['col' + 'KWh'] / df['elapse_time'] * 3.6
     return df
 
 
+granularities = ['All', 'Hourly', 'Daily', 'Monthly']
+partioning = ['None', 'Monthly', 'Yearly']
+
+
+@extract.command('aggregate-all')
+@click.option('--force', is_flag=True, default=False)
+def aggregate_all(force):
+    with clock_watch(print, 'aggregate all') as cw:
+        for partition in partioning:
+            for granularity in granularities:
+                if not (granularity == 'Yearly' and partition == 'Monthly'):
+                    cw.print(f'{granularity} by {partition}')
+                    aggregate_impl(granularity, partition, force)
+
+
 @extract.command('aggregate')
 @click.option('--granularity', '-f', help='Granularity of the aggregation', required=False, default='All',
-              type=click.Choice(['All', 'Hourly', 'Daily', 'Monthly'], case_sensitive=False))
+              type=click.Choice(granularities, case_sensitive=False))
 @click.option('--partition', '-f', help='Partitioning of the files', required=False, default='None',
-              type=click.Choice(['None', 'Monthly', 'Yearly'], case_sensitive=False))
+              type=click.Choice(partioning, case_sensitive=False))
 @click.option('--force', is_flag=True, default=False)
 def aggregate(granularity, partition, force):
-    if partition == 'None':
-        feather_file_pattern = configure.re_feather_a
-        file_namer = configure.gen_feather_a(granularity)
-    elif partition == 'Yearly':
-        feather_file_pattern = configure.re_feather_y
-        file_namer = configure.gen_feather_y(granularity)
-    elif partition == 'Monthly':
-        feather_file_pattern = configure.re_feather_m
-        file_namer = configure.gen_feather_m(granularity)
-    else:
-        raise ValueError(f'Invalid partition {partition}.')
+    return aggregate_impl(granularity, partition, force)
 
-    folder = configure.solax_stats_folder
-    files = os.listdir(folder)
-    try:
-        max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
-    except ValueError:
-        max_partition = ''
+def aggregate_impl(granularity, partition, force):
+    with clock_watch(print, f'Aggregating solax raw files by {granularity} ' +
+                            ('into one  file' if partition == 'None' else f'in {partition} files.')) as cw:
+        if partition == 'None':
+            feather_file_pattern = configure.re_feather_a
+            file_namer = configure.gen_feather_a(granularity)
+        elif partition == 'Yearly':
+            feather_file_pattern = configure.re_feather_y
+            file_namer = configure.gen_feather_y(granularity)
+        elif partition == 'Monthly':
+            feather_file_pattern = configure.re_feather_m
+            file_namer = configure.gen_feather_m(granularity)
+        else:
+            raise ValueError(f'Invalid partition {partition}.')
 
-    if granularity == 'All':
-        grouping = ['year', 'month', 'day', 'hour', 'minute']
-    elif granularity == 'Hourly':
-        grouping = ['year', 'month', 'day', 'hour']
-    elif granularity == 'Daily':
-        grouping = ['year', 'month', 'day']
-    elif granularity == 'Monthly':
-        grouping = ['year', 'month']
-    elif granularity == 'Yearly':
-        if partition == 'Monthly':
-            raise ValueError(f'Cannot partition in {partition} for {granularity} granularity.')
-        grouping = ['year']
-    else:
-        raise ValueError(f'Invalid  granularity {granularity}.')
+        folder = configure.solax_stats_folder
+        files = os.listdir(folder)
+        try:
+            max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
+        except ValueError:
+            max_partition = ''
 
-    previous_partition = ''
-    current_partition = ''
-    dfs: List[pd.DataFrame] = []
-    for fi in files:
-        ma = configure.re_feather_d.match(fi)
-        if not ma or fi < max_partition:
-            continue
-        current_partition = file_namer(fi)
-        if previous_partition and current_partition != previous_partition:
-            filename = os.path.join(folder, previous_partition)
-            aggregate_impl(dfs, grouping).to_feather(filename)
-            print(f'saved {filename}')
-            dfs = []
+        if granularity == 'All':
+            grouping = ['year', 'month', 'day', 'hour', 'minute']
+        elif granularity == 'Hourly':
+            grouping = ['year', 'month', 'day', 'hour']
+        elif granularity == 'Daily':
+            grouping = ['year', 'month', 'day']
+        elif granularity == 'Monthly':
+            grouping = ['year', 'month']
+        elif granularity == 'Yearly':
+            if partition == 'Monthly':
+                raise ValueError(f'Cannot partition in {partition} for {granularity} granularity.')
+            grouping = ['year']
+        else:
+            raise ValueError(f'Invalid  granularity {granularity}.')
+
+        previous_partition = ''
+        current_partition = ''
+        dfs: List[pd.DataFrame] = []
+        for fi in files:
+            ma = configure.re_feather_d.match(fi)
+            if not ma or fi < max_partition:
+                continue
+            current_partition = file_namer(fi)
+            # print(f'read {fi}, current_partition:{current_partition}')
+            if previous_partition and (current_partition != previous_partition):
+                filename = os.path.join(folder, previous_partition)
+                concat_impl(dfs, grouping).to_feather(filename)
+                cw.print(f' > saved {filename}')
+                dfs = []
             previous_partition = current_partition
-        df = pd.read_feather(os.path.join(folder, fi))
-        dfs.append(df)
+            df = pd.read_feather(os.path.join(folder, fi))
+            dfs.append(df)
 
-    if current_partition:
-        filename = os.path.join(folder, current_partition)
-        aggregate_impl(dfs, grouping).to_feather(filename)
-        print(f'saved {filename}')
+        if current_partition:
+            filename = os.path.join(folder, current_partition)
+            concat_impl(dfs, grouping).to_feather(filename)
+            cw.print(f' > saved {filename}')
 
 
 if __name__ == '__main__':
