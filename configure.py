@@ -31,17 +31,23 @@ def gen_feather_d(filename):
 
 def gen_feather_m(granularity):
     def namer(filename):
-        return '.'.join(file_segments + [granularity, date_from_filename(filename).strftime('%Y-%m'), 'feather'])
+        if filename:
+            return '.'.join(file_segments + [granularity, date_from_filename(filename).strftime('%Y-%m'), 'feather'])
+        return '\\.'.join(file_segments + [granularity, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)', 'feather'])
     return namer
 
 def gen_feather_y(granularity):
     def namer(filename):
-        return '.'.join(file_segments + [granularity, date_from_filename(filename).strftime('%Y'), 'feather'])
+        if filename:
+            return '.'.join(file_segments + [granularity, date_from_filename(filename).strftime('%Y'), 'feather'])
+        return '\\.'.join(file_segments + [granularity, r'(?P<yyyy>\d{4})', 'feather'])
     return namer
 
 def gen_feather_a(granularity):
     def namer(filename):
-        return '.'.join(file_segments + [granularity, 'feather'])
+        if filename:
+            return '.'.join(file_segments + [granularity, 'feather'])
+        return '\\.'.join(file_segments + [granularity, 'feather'])
     return namer
 
 
@@ -67,9 +73,9 @@ def read_config():
         'local_file'         : local_file,
         're_json'            : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)', 'json'),
         're_feather_d'       : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)', 'feather'),
-        're_feather_m'       : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)', 'feather'),
-        're_feather_y'       : insert_re(file_segments, r'(?P<yyyy>\d{4})', 'feather'),
-        're_feather_a'       : insert_re(file_segments, 'feather'),
+        # 're_feather_m'       : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)', 'feather'),
+        # 're_feather_y'       : insert_re(file_segments, r'(?P<yyyy>\d{4})', 'feather'),
+        # 're_feather_a'       : insert_re(file_segments, 'feather'),
         'file_segments'      : file_segments
     }
 

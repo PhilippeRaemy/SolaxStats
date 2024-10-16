@@ -62,7 +62,6 @@ def login(url, proxies, user_name, encrypted_password) -> requests.Session:
 
 def json_decode(response):
     json_response = json.loads(response.content.decode('utf8'))
-    print(json.dumps(json_response, indent=2))
     return json_response
 
 
@@ -92,64 +91,66 @@ def get_daily_data(session, token, url, date: datetime, proxies):
         'token'             : token,
         'version'           : 'blue',
     }
-    print(payload)
-    print(json.dumps(headers, indent=2))
-    print(len(payload))
+    # print(payload)
+    # print(json.dumps(headers, indent=2))
+    # print(len(payload))
     return session.post(url, headers=headers, data=payload)  # , proxies=proxies, verify=False)
 
 
 @extract.command('history')
 def history():
-    # fiddler proxy
-    http_proxy = "http://127.0.0.1:8888"
-    https_proxy = "http://127.0.0.1:8888"
+    with clock_watch(print, f'Download history') as cw:
+        # fiddler proxy
+        http_proxy = "http://127.0.0.1:8888"
+        https_proxy = "http://127.0.0.1:8888"
 
-    proxies = {
-        "http" : http_proxy,
-        "https": https_proxy,
-    }
+        proxies = {
+            "http" : http_proxy,
+            "https": https_proxy,
+        }
 
-    try:
-        with open(configure.local_file, 'r') as stats_file:
-            stats = json.loads(stats_file.read())
-    except Exception as ex:
-        print(ex)
-        stats = []
+        try:
+            with open(configure.local_file, 'r') as stats_file:
+                stats = json.loads(stats_file.read())
+        except Exception as ex:
+            print(ex)
+            stats = []
 
-    solax_stats_folder = configure.solax_stats_folder
-    os.makedirs(solax_stats_folder, exist_ok=True)
-    target_file = configure.solax_stats_file
-    target_file_pattern = configure.re_json
+        solax_stats_folder = configure.solax_stats_folder
+        os.makedirs(solax_stats_folder, exist_ok=True)
+        target_file = configure.solax_stats_file
+        target_file_pattern = configure.re_json
 
-    try:
-        last_json_datetime = max(configure.date_from_filename(fi)
-                                 for fi in os.listdir(solax_stats_folder)
-                                 if configure.re_json.match(fi))
-    except:
-        last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
+        try:
+            last_json_datetime = max(configure.date_from_filename(fi)
+                                     for fi in os.listdir(solax_stats_folder)
+                                     if configure.re_json.match(fi))
+        except:
+            last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
-    session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies,
-                                      configure.user_name, configure.encrypted_password)
-    while last_json_datetime < datetime.now():
-        data = get_daily_data(session, session_response.get('token'),
-                              'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
-                              last_json_datetime, proxies
-                              )
-        json_response = json_decode(data)
+        session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies,
+                                          configure.user_name, configure.encrypted_password)
+        while last_json_datetime < datetime.now():
+            data = get_daily_data(session, session_response.get('token'),
+                                  'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
+                                  last_json_datetime, proxies
+                                  )
+            json_response = json_decode(data)
 
-        json_file = os.path.join(solax_stats_folder, configure.gen_json_d(last_json_datetime))
-        with open(json_file, 'w') as fi:
-            fi.write(json.dumps(json_response, indent=2))
+            json_file = os.path.join(solax_stats_folder, configure.gen_json_d(last_json_datetime))
+            with open(json_file, 'w') as fi:
+                fi.write(json.dumps(json_response, indent=2))
 
-        json_to_feather(json_file, json_response.get('object'))
-        df: pd.DataFrame = pd.DataFrame(json_response.get('object'))
+            json_to_feather(json_file, json_response.get('object'))
+            df: pd.DataFrame = pd.DataFrame(json_response.get('object'))
 
-        last_json_datetime += timedelta(days=1)
+            last_json_datetime += timedelta(days=1)
+            cw.print(f'Done {json_file}')
 
 
 def json_to_feather(json_file, data=None):
     if not data:
-        print(f'read {json_file}')
+        # print(f'read {json_file}')
         with open(json_file, 'r') as fi:
             data = json.loads(fi.read()).get('object')
 
@@ -171,7 +172,7 @@ def json_to_feather(json_file, data=None):
 
     feather_file = json_file.replace('.json', '.feather')
     df.to_feather(feather_file)
-    print(f'wrote {feather_file}')
+    # print(f'wrote {feather_file}')
 
 
 @extract.command('compress')
@@ -233,16 +234,15 @@ def aggregate_impl(granularity, partition, force):
     with clock_watch(print, f'Aggregating solax raw files by {granularity} ' +
                             ('into one  file' if partition == 'None' else f'in {partition} files.')) as cw:
         if partition == 'None':
-            feather_file_pattern = configure.re_feather_a
             file_namer = configure.gen_feather_a(granularity)
         elif partition == 'Yearly':
-            feather_file_pattern = configure.re_feather_y
             file_namer = configure.gen_feather_y(granularity)
         elif partition == 'Monthly':
-            feather_file_pattern = configure.re_feather_m
             file_namer = configure.gen_feather_m(granularity)
         else:
             raise ValueError(f'Invalid partition {partition}.')
+
+        feather_file_pattern = re.compile(file_namer(None), re.IGNORECASE)
 
         folder = configure.solax_stats_folder
         files = os.listdir(folder)
@@ -271,9 +271,11 @@ def aggregate_impl(granularity, partition, force):
         dfs: List[pd.DataFrame] = []
         for fi in files:
             ma = configure.re_feather_d.match(fi)
-            if not ma or fi < max_partition:
+            if not ma:
                 continue
             current_partition = file_namer(fi)
+            if current_partition < max_partition:
+                continue
             # print(f'read {fi}, current_partition:{current_partition}')
             if previous_partition and (current_partition != previous_partition):
                 filename = os.path.join(folder, previous_partition)
