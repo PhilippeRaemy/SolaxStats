@@ -37,6 +37,37 @@ We're interested in:
 """
 
 
+class prices():
+    def __init__(self):
+        with open(os.path.join(configure.solax_stats_folder, 'prices.json'), 'r') as fi:
+            prices = json.loads(fi.read)
+            prices['profiles'] = [{**p,
+                                   "peak-days":
+                                       p.get("peak-days",
+                                             [p['peak-week'] for d in range(0, 5)] +
+                                             [p['peak-weekend'] for d in range(5, 7)]
+                                             )
+                                   } for p in prices['profiles']]
+            self._prices = [prices]
+
+    class price:
+        def __init__(self, buy, sell):
+            self.buy = buy
+            self.sell = sell
+
+    def get_price(self, dt: datetime):
+        buy = next((p for p in self._prices['buy'] if p['date_from'] <= dt < p['date_to']), None)
+        sell = next((p for p in self._prices['sell'] if p['date_from'] <= dt < p['date_to']), None)
+        profile = next((p for p in self._prices['profile'] if p['date_from'] <= dt < p['date_to']), None)
+        if not buy or not sell or not profile:
+            raise ValueError(f"No prices found for {dt}")
+        hour = dt.hour
+        weekday = dt.weekday()
+        peak_day = profile['peak-days'][weekday]
+        return prices.price(buy['peak'] if peak_day[0] <= hour < peak_day[1] else buy['offpeak'],
+                            sell['peak'] if peak_day[0] <= hour < peak_day[1] else sell['offpeak'])
+
+
 @analyse.command("show")
 @click.option('--period', '-p', required=True, type=str,
               help='Report period. A day can be specified as yyyy-MM-dd, a month as yyyy-MM, a year as yyyy or a custom range as yyyy-MM-dd..yyyy-MM-dd')
