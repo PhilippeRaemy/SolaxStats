@@ -208,6 +208,8 @@ def concat_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame:
     return df
 
 
+# TODO: match granularities to the analysis granularities...
+
 granularities = ['All', 'Hourly', 'Daily', 'Monthly']
 partioning = ['None']  # , 'Monthly', 'Yearly']
 

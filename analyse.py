@@ -68,17 +68,30 @@ class prices():
                             sell['peak'] if peak_day[0] <= hour < peak_day[1] else sell['offpeak'])
 
 
+granularities = [
+    {'5min': 1 / 24 / 12},
+    {'Hour': 1 / 24},
+    {'Peak': 1 / 2},
+    {'Day': 1},
+    {'Month': 30},
+    {'Quarter': 90},
+    {'Year': 360},
+]
+
+
 @analyse.command("show")
 @click.option('--period', '-p', required=True, type=str,
               help='Report period. A day can be specified as yyyy-MM-dd, a month as yyyy-MM, a year as yyyy or a custom range as yyyy-MM-dd..yyyy-MM-dd')
 @click.option('--report', '-r', help='Report type', required=False, default='Raw',
               type=click.Choice(['Raw', 'Financial', 'Battery', 'Panels'], case_sensitive=False))
 @click.option('--by', '-by', help='Report type', required=False, default='5min',
-              type=click.Choice(['5min', 'Hour', 'Peak', 'Day', 'Month', 'Quarter', 'Year'], case_sensitive=False))
+              type=click.Choice(granularities.keys(), case_sensitive=False))
 @click.option('--uom', '-u', help='Unit of measure. Available values are W, kW and KWh',
               type=click.Choice(['W', 'kW', 'kWh'], case_sensitive=False), default='kW')
 def show(report: str, by: str, period: str, uom: str):
-    """read the data for a range of days and display"""
+    """read the data for a range of days and display
+       for now not using partitions
+    """
 
     print(period)
     period_ma = re.match('(?P<from>(\d{4}((-(?P<mm>\d\d))?(-(?P<dd>\d\d))?)?))(..(?P<to>\d{4}-\d\d-\d\d))?$', period)
@@ -109,6 +122,10 @@ def show(report: str, by: str, period: str, uom: str):
                      'pac1', 'pac2', 'pac3',
                      'pvPower', 'gridpower', 'feedinpower', 'EPSPower', 'epspower', 'EpsActivePower',
                      'consumeEnergyMeter2', 'feedinPowerMeter2', 'Meter2ComState', 'relayPower', 'batPower1']
+
+    if (date_to - date_from).total_seconds() < granularities[by]:
+        raise ValueError(f'The selected period is too  short to be represented in {by}')
+
 
     jfile_re = configure.target_file_pattern
     dfs = []
