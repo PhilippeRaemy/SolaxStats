@@ -92,7 +92,7 @@ def show(report: str, by: str, period: str, uom: str):
     """read the data for a range of days and display
        for now not using partitions
     """
-
+    #v TODO: use appropriate data file given granularity
     print(period)
     period_ma = re.match('(?P<from>(\d{4}((-(?P<mm>\d\d))?(-(?P<dd>\d\d))?)?))(..(?P<to>\d{4}-\d\d-\d\d))?$', period)
     print(period_ma)
@@ -171,6 +171,7 @@ def show(report: str, by: str, period: str, uom: str):
 
         df.drop(columns=to_be_deleted, inplace=True)
 
+        # TODO : use https://pandas.pydata.org/docs/user_guide/style.html to visualize the data
         print(df.to_string(sparsify=False))
 
         dfs.append(df)
