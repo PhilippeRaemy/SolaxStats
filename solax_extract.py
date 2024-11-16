@@ -98,7 +98,7 @@ def get_daily_data(session, token, url, date: datetime, proxies):
 
 
 @extract.command('history')
-def history():
+def extract_history():
     with clock_watch(print, f'Download history') as cw:
         # fiddler proxy
         http_proxy = "http://127.0.0.1:8888"
@@ -116,14 +116,15 @@ def history():
             print(ex)
             stats = []
 
-        solax_stats_folder = configure.solax_stats_folder
-        os.makedirs(solax_stats_folder, exist_ok=True)
+        solax_rawdata_folder = configure.solax_rawdata_folder
+        os.makedirs(configure.solax_stats_folder, exist_ok=True)
+        os.makedirs(solax_rawdata_folder, exist_ok=True)
         target_file = configure.solax_stats_file
         target_file_pattern = configure.re_json
 
         try:
             last_json_datetime = max(configure.date_from_filename(fi)
-                                     for fi in os.listdir(solax_stats_folder)
+                                     for fi in os.listdir(solax_rawdata_folder)
                                      if configure.re_json.match(fi))
         except:
             last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
@@ -137,7 +138,7 @@ def history():
                                   )
             json_response = json_decode(data)
 
-            json_file = os.path.join(solax_stats_folder, configure.gen_json_d(last_json_datetime))
+            json_file = os.path.join(solax_rawdata_folder, configure.gen_json_d(last_json_datetime))
             with open(json_file, 'w') as fi:
                 fi.write(json.dumps(json_response, indent=2))
 
@@ -146,6 +147,7 @@ def history():
 
             last_json_datetime += timedelta(days=1)
             cw.print(f'Done {json_file}')
+    aggregate_all()
 
 
 def json_to_feather(json_file, data=None):
@@ -207,18 +209,17 @@ def concat_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame:
 
 
 granularities = ['All', 'Hourly', 'Daily', 'Monthly']
-partioning = ['None'] #, 'Monthly', 'Yearly']
+partioning = ['None']  # , 'Monthly', 'Yearly']
 
 
 @extract.command('aggregate-all')
-@click.option('--force', is_flag=True, default=False)
-def aggregate_all(force):
+def aggregate_all():
     with clock_watch(print, 'aggregate all') as cw:
         for partition in partioning:
             for granularity in granularities:
                 if not (granularity == 'Yearly' and partition == 'Monthly'):
                     cw.print(f'{granularity} by {partition}')
-                    aggregate_impl(granularity, partition, force)
+                    aggregate_impl(granularity, partition)
 
 
 @extract.command('aggregate')
@@ -227,10 +228,11 @@ def aggregate_all(force):
 @click.option('--partition', '-f', help='Partitioning of the files', required=False, default='None',
               type=click.Choice(partioning, case_sensitive=False))
 @click.option('--force', is_flag=True, default=False)
-def aggregate(granularity, partition, force):
-    return aggregate_impl(granularity, partition, force)
+def aggregate(granularity, partition):
+    return aggregate_impl(granularity, partition)
 
-def aggregate_impl(granularity, partition, force):
+
+def aggregate_impl(granularity, partition):
     with clock_watch(print, f'Aggregating solax raw files by {granularity} ' +
                             ('into one  file' if partition == 'None' else f'in {partition} files.')) as cw:
         if partition == 'None':
