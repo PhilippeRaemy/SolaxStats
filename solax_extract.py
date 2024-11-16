@@ -207,7 +207,7 @@ def concat_impl(dfs: List[pd.DataFrame], grouping: List[str]) -> pd.DataFrame:
 
 
 granularities = ['All', 'Hourly', 'Daily', 'Monthly']
-partioning = ['None', 'Monthly', 'Yearly']
+partioning = ['None'] #, 'Monthly', 'Yearly']
 
 
 @extract.command('aggregate-all')
