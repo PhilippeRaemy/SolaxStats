@@ -17,7 +17,7 @@ from numpy.ma.core import power
 from pandas import DataFrame
 from pyarrow.pandas_compat import dataframe_to_types
 
-import configure
+import solax_configure
 import schemas
 from clock_watch import clock_watch
 

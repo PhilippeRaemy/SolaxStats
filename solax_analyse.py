@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dateutil.relativedelta import relativedelta
 
-import configure
+import solax_configure
 import solax_extract
 import click
 from datetime import datetime
@@ -68,15 +68,15 @@ class prices():
                             sell['peak'] if peak_day[0] <= hour < peak_day[1] else sell['offpeak'])
 
 
-granularities = [
-    {'5min': 1 / 24 / 12},
-    {'Hour': 1 / 24},
-    {'Peak': 1 / 2},
-    {'Day': 1},
-    {'Month': 30},
-    {'Quarter': 90},
-    {'Year': 360},
-]
+granularities = {
+    '5min'   : 1 / 24 / 12,
+    'Hour'   : 1 / 24,
+    'Peak'   : 1 / 2,
+    'Day'    : 1,
+    'Month'  : 30,
+    'Quarter': 90,
+    'Year'   : 360,
+}
 
 
 @analyse.command("show")
@@ -92,7 +92,7 @@ def show(report: str, by: str, period: str, uom: str):
     """read the data for a range of days and display
        for now not using partitions
     """
-    #v TODO: use appropriate data file given granularity
+    # v TODO: use appropriate data file given granularity
     print(period)
     period_ma = re.match('(?P<from>(\d{4}((-(?P<mm>\d\d))?(-(?P<dd>\d\d))?)?))(..(?P<to>\d{4}-\d\d-\d\d))?$', period)
     print(period_ma)
@@ -125,7 +125,6 @@ def show(report: str, by: str, period: str, uom: str):
 
     if (date_to - date_from).total_seconds() < granularities[by]:
         raise ValueError(f'The selected period is too  short to be represented in {by}')
-
 
     jfile_re = configure.target_file_pattern
     dfs = []
