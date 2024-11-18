@@ -17,7 +17,7 @@ from numpy.ma.core import power
 from pandas import DataFrame
 from pyarrow.pandas_compat import dataframe_to_types
 
-import solax_configure
+import solax_configure as cfg
 import schemas
 from clock_watch import clock_watch
 
@@ -68,7 +68,7 @@ def json_decode(response):
 # Press the green button in the gutter to run the script.
 def get_daily_data(session, token, url, date: datetime, proxies):
     payload = {
-        'siteId': configure.site_id,
+        'siteId': cfg.site_id,
         'time'  : date.strftime('%Y-%m-%d')
     }
     headers = {
@@ -110,27 +110,27 @@ def extract_history():
         }
 
         try:
-            with open(configure.local_file, 'r') as stats_file:
+            with open(cfg.local_file, 'r') as stats_file:
                 stats = json.loads(stats_file.read())
         except Exception as ex:
             print(ex)
             stats = []
 
-        solax_rawdata_folder = configure.solax_rawdata_folder
-        os.makedirs(configure.solax_stats_folder, exist_ok=True)
+        solax_rawdata_folder = cfg.solax_rawdata_folder
+        os.makedirs(cfg.solax_stats_folder, exist_ok=True)
         os.makedirs(solax_rawdata_folder, exist_ok=True)
-        target_file = configure.solax_stats_file
-        target_file_pattern = configure.re_json
+        target_file = cfg.solax_stats_file
+        target_file_pattern = cfg.re_json
 
         try:
-            last_json_datetime = max(configure.date_from_filename(fi)
+            last_json_datetime = max(cfg.date_from_filename(fi)
                                      for fi in os.listdir(solax_rawdata_folder)
-                                     if configure.re_json.match(fi))
+                                     if cfg.re_json.match(fi))
         except:
             last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
         session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies,
-                                          configure.user_name, configure.encrypted_password)
+                                          cfg.user_name, cfg.encrypted_password)
         while last_json_datetime < datetime.now():
             data = get_daily_data(session, session_response.get('token'),
                                   'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
@@ -138,7 +138,7 @@ def extract_history():
                                   )
             json_response = json_decode(data)
 
-            json_file = os.path.join(solax_rawdata_folder, configure.gen_json_d(last_json_datetime))
+            json_file = os.path.join(solax_rawdata_folder, cfg.gen_json_d(last_json_datetime))
             with open(json_file, 'w') as fi:
                 fi.write(json.dumps(json_response, indent=2))
 
@@ -147,7 +147,7 @@ def extract_history():
 
             last_json_datetime += timedelta(days=1)
             cw.print(f'Done {json_file}')
-    aggregate_all()
+    _aggregate_all()
 
 
 def json_to_feather(json_file, data=None):
@@ -160,7 +160,7 @@ def json_to_feather(json_file, data=None):
     date_columns = ['year', 'month', 'day']
     timestamp_columns = date_columns + ['hour', 'minute']
     if [c for c in date_columns if c not in df.columns]:  # any timestamp column missing, happens in early files
-        ma = configure.target_file_pattern.match(json_file)
+        ma = cfg.target_file_pattern.match(json_file)
         for c in date_columns:
             df[c] = ma.groupdict[c]
 
@@ -181,10 +181,10 @@ def json_to_feather(json_file, data=None):
 @click.option('--force', is_flag=True, default=False)
 def compress(force):
     count = 0
-    for fi in os.listdir(configure.solax_stats_folder):
-        if not configure.re_json.match(fi):
+    for fi in os.listdir(cfg.solax_rawdata_folder):
+        if not cfg.re_json.match(fi):
             continue
-        json_file = os.path.join(configure.solax_stats_folder, fi)
+        json_file = os.path.join(cfg.solax_rawdata_folder, fi)
         feather_file = json_file.replace('.json', '.feather')
 
         if not force and os.path.exists(feather_file):
@@ -216,12 +216,16 @@ partioning = ['None']  # , 'Monthly', 'Yearly']
 
 @extract.command('aggregate-all')
 def aggregate_all():
+    _aggregate_all()
+
+
+def _aggregate_all():
     with clock_watch(print, 'aggregate all') as cw:
         for partition in partioning:
             for granularity in granularities:
                 if not (granularity == 'Yearly' and partition == 'Monthly'):
                     cw.print(f'{granularity} by {partition}')
-                    aggregate_impl(granularity, partition)
+                    _aggregate(granularity, partition)
 
 
 @extract.command('aggregate')
@@ -231,25 +235,26 @@ def aggregate_all():
               type=click.Choice(partioning, case_sensitive=False))
 @click.option('--force', is_flag=True, default=False)
 def aggregate(granularity, partition):
-    return aggregate_impl(granularity, partition)
+    return _aggregate(granularity, partition)
 
 
-def aggregate_impl(granularity, partition):
+def _aggregate(granularity, partition):
     with clock_watch(print, f'Aggregating solax raw files by {granularity} ' +
                             ('into one  file' if partition == 'None' else f'in {partition} files.')) as cw:
         if partition == 'None':
-            file_namer = configure.gen_feather_a(granularity)
+            file_namer = cfg.gen_feather_a(granularity)
         elif partition == 'Yearly':
-            file_namer = configure.gen_feather_y(granularity)
+            file_namer = cfg.gen_feather_y(granularity)
         elif partition == 'Monthly':
-            file_namer = configure.gen_feather_m(granularity)
+            file_namer = cfg.gen_feather_m(granularity)
         else:
             raise ValueError(f'Invalid partition {partition}.')
 
         feather_file_pattern = re.compile(file_namer(None), re.IGNORECASE)
 
-        folder = configure.solax_stats_folder
-        files = os.listdir(folder)
+        folder = cfg.solax_stats_folder
+        rawdata = cfg.solax_rawdata_folder
+        files = os.listdir(rawdata)
         try:
             max_partition = max((fi for fi in files if feather_file_pattern.match(fi)))
         except ValueError:
@@ -274,7 +279,7 @@ def aggregate_impl(granularity, partition):
         current_partition = ''
         dfs: List[pd.DataFrame] = []
         for fi in files:
-            ma = configure.re_feather_d.match(fi)
+            ma = cfg.re_feather_d.match(fi)
             if not ma:
                 continue
             current_partition = file_namer(fi)
@@ -287,7 +292,7 @@ def aggregate_impl(granularity, partition):
                 cw.print(f' > saved {filename}')
                 dfs = []
             previous_partition = current_partition
-            df = pd.read_feather(os.path.join(folder, fi))
+            df = pd.read_feather(os.path.join(rawdata, fi))
             dfs.append(df)
 
         if current_partition:
