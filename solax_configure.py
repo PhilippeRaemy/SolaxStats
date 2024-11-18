@@ -73,7 +73,6 @@ def read_config():
         'encrypted_password'  : os.environ.get('ENCRYPTED_PASSWORD'),
         'site_id'             : os.environ.get('SITE_ID'),
         'solax_stats_folder'  : solax_stats_folder,
-        'solax_rawdata_folder': os.path.join(solax_stats_folder, 'rawdata'),
         'solax_stats_file'    : solax_stats_file,
         'target_file_pattern' : re.compile('.*(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d).json$'),
         'local_file'          : local_file,
@@ -94,6 +93,9 @@ def read_config():
         if local_file == configured:
             break
         local_file = configured
+
+    # post-read settings
+    config['solax_rawdata_folder']= os.path.join(config['solax_stats_folder'], 'rawdata')
 
     this_module = sys.modules[__name__]
     for k, v in config.items():
