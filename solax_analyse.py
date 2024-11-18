@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dateutil.relativedelta import relativedelta
 
-import solax_configure
+import solax_configure as configure
 import solax_extract
 import click
 from datetime import datetime
@@ -69,13 +69,13 @@ class prices():
 
 
 granularities = {
-    '5min'   : 1 / 24 / 12,
-    'Hour'   : 1 / 24,
-    'Peak'   : 1 / 2,
-    'Day'    : 1,
-    'Month'  : 30,
-    'Quarter': 90,
-    'Year'   : 360,
+    '5min'   : {'file': 'solax.All.Feather', 'granularity': 1 / 24 / 12},
+    'Hour'   : {'file': 'solax.Hourly.Feather', 'granularity': 1 / 24},
+    'Peak'   : {'file': 'solax.Hourly.Feather', 'granularity': 1 / 2},
+    'Day'    : {'file': 'solax.Daily.Feather', 'granularity': 1},
+    'Month'  : {'file': 'solax.Monthly.Feather', 'granularity': 30},
+    'Quarter': {'file': 'solax.Monthly.Feather', 'granularity': 90},
+    'Year'   : {'file': 'solax.Monthly.Feather', 'granularity': 360},
 }
 
 
@@ -123,65 +123,66 @@ def show(report: str, by: str, period: str, uom: str):
                      'pvPower', 'gridpower', 'feedinpower', 'EPSPower', 'epspower', 'EpsActivePower',
                      'consumeEnergyMeter2', 'feedinPowerMeter2', 'Meter2ComState', 'relayPower', 'batPower1']
 
-    if (date_to - date_from).total_seconds() < granularities[by]:
+    if (date_to - date_from).total_seconds() < granularities[by]['granularity']:
         raise ValueError(f'The selected period is too  short to be represented in {by}')
 
     jfile_re = configure.target_file_pattern
     dfs = []
     solax_stats_folder = configure.solax_stats_folder
-    for jfile, feather_file, value_date in (
-            (jfile,
-             feather_file,
-             datetime(
-                 int(jfile_ma.groupdict()['year']),
-                 int(jfile_ma.groupdict()['month']),
-                 int(jfile_ma.groupdict()['day'])))
-            for jfile, feather_file, jfile_ma in (
-            (os.path.join(solax_stats_folder, fi),
-             os.path.join(solax_stats_folder, fi.replace('.json', '.feather')),
-             jfile_re.match(fi))
-            for fi in os.listdir(solax_stats_folder)) if jfile_ma
-    ):
-        if not (value_date >= date_from and value_date <= date_to):
-            continue
-
-        if os.path.exists(feather_file):
-            print(f'read {feather_file}')
-            df = pd.read_feather(feather_file)
-        else:
-            print('Some feather file missing. Run solax.exe extract compress first.')
-            return
-
-        timestamp_columns = ['year', 'month', 'day', 'hour', 'minute']
-        df['timestamp'] = pd.to_datetime(df[timestamp_columns])
-        to_be_deleted = to_be_deleted + timestamp_columns
-        df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
-
-        if uom == 'W':
-            pass
-        elif uom == 'kW':
-            for power_column in power_columns:
-                df[power_column] = df[power_column] / 1000.0
-        elif uom == 'kWh':
-            for power_column in power_columns:
-                df[power_column] = df[power_column] * df['elapsed_time'] / 3600.0 / 1000.0
-        else:
-            raise ValueError(f'Invalid unit of measure :{uom}')
-
-        df.drop(columns=to_be_deleted, inplace=True)
-
-        # TODO : use https://pandas.pydata.org/docs/user_guide/style.html to visualize the data
-        print(df.to_string(sparsify=False))
-
-        dfs.append(df)
-
-    df = pd.concat(dfs)
+    #     for jfile, feather_file, value_date in (
+    #             (jfile,
+    #              feather_file,
+    #              datetime(
+    #                  int(jfile_ma.groupdict()['year']),
+    #                  int(jfile_ma.groupdict()['month']),
+    #                  int(jfile_ma.groupdict()['day'])))
+    #             for jfile, feather_file, jfile_ma in (
+    #             (os.path.join(solax_stats_folder, fi),
+    #              os.path.join(solax_stats_folder, fi.replace('.json', '.feather')),
+    #              jfile_re.match(fi))
+    #             for fi in os.listdir(solax_stats_folder)) if jfile_ma
+    #     ):
+    #         if not (value_date >= date_from and value_date <= date_to):
+    #             continue
+    #
+    #         if os.path.exists(feather_file):
+    #             print(f'read {feather_file}')
+    #             df = pd.read_feather(feather_file)
+    #         else:
+    #             print('Some feather file missing. Run solax.exe extract compress first.')
+    #             return
+    #
+    #         timestamp_columns = ['year', 'month', 'day', 'hour', 'minute']
+    #         df['timestamp'] = pd.to_datetime(df[timestamp_columns])
+    #         to_be_deleted = to_be_deleted + timestamp_columns
+    #         df['elapsed_time'] = df['timestamp'].diff().dt.total_seconds().fillna(300)
+    #
+    #         if uom == 'W':
+    #             pass
+    #         elif uom == 'kW':
+    #             for power_column in power_columns:
+    #                 df[power_column] = df[power_column] / 1000.0
+    #         elif uom == 'kWh':
+    #             for power_column in power_columns:
+    #                 df[power_column] = df[power_column] * df['elapsed_time'] / 3600.0 / 1000.0
+    #         else:
+    #             raise ValueError(f'Invalid unit of measure :{uom}')
+    #
+    #         df.drop(columns=to_be_deleted, inplace=True)
+    #
+    #         # TODO : use https://pandas.pydata.org/docs/user_guide/style.html to visualize the data
+    #         print(df.to_string(sparsify=False))
+    #
+    #         dfs.append(df)
+    #
+    #     df = pd.concat(dfs)
+    df = pd.read_feather(os.path.join(solax_stats_folder, granularities[by]['file']))
     fig, ax = plt.subplots()  # Create a figure containing a single Axes.
     for power_column in power_columns:
         ax.plot(df['timestamp'], df[power_column], label=power_column)  # Plot some data on the Axes.
 
     ax.set_xlabel(period)
     ax.set_ylabel(uom)
-    ax.set_title('Solaire Sillons')
+    ax.set_title(f'Solaire Sillons\n{report} by {by}\nfrom{date_from} to {date_to}')
     ax.legend()
     plt.show()
