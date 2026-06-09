@@ -67,10 +67,12 @@ def read_config():
     file_segments = solax_stats_file.split('.')[:-1]
 
     config = {
-        'user_name'           : os.environ.get('USER_NAME'),
-        'site_password'       : os.environ.get('SITE_PASSWORD'),
+        'user_name'           : os.environ.get('SOLAX_USER_NAME', os.environ.get('USER_NAME')),
+        'site_password'       : os.environ.get('SOLAX_SITE_PASSWORD', os.environ.get('SITE_PASSWORD')),
         'config_password'     : os.environ.get('CONFIG_PASSWORD'),
-        'encrypted_password'  : os.environ.get('ENCRYPTED_PASSWORD'),
+        'encrypted_password'  : os.environ.get('SOLAX_ENCRYPTED_PASSWORD', os.environ.get('ENCRYPTED_PASSWORD')),
+        'auth_mode'           : os.environ.get('SOLAX_AUTH_MODE', 'legacy_encrypted'),
+        'api_token'           : os.environ.get('SOLAX_API_TOKEN'),
         'site_id'             : os.environ.get('SITE_ID'),
         'solax_stats_folder'  : solax_stats_folder,
         'solax_stats_file'    : solax_stats_file,
@@ -126,7 +128,7 @@ def get_config():
 def show():
     cfg = copy.deepcopy(_config)
     for k in cfg.keys():
-        if 'password' in k:
+        if 'password' in k or 'token' in k:
             cfg[k] = '******'
     print(json.dumps(cfg, indent=2, default=str))
 

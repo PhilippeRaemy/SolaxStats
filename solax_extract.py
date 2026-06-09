@@ -21,6 +21,9 @@ import solax_configure as cfg
 import schemas
 from clock_watch import clock_watch
 
+LEGACY_LOGIN_URL = 'https://www.solaxcloud.com/phoebus/login/loginNew'
+LEGACY_DAILY_URL = 'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower'
+
 
 @click.group()
 @click.version_option()
@@ -65,6 +68,46 @@ def json_decode(response):
     return json_response
 
 
+def first_non_empty(*values):
+    for value in values:
+        if value:
+            return value
+    return None
+
+
+def resolve_session_token(proxies, auth_mode=None, user_name=None, site_password=None,
+                          encrypted_password=None, api_token=None):
+    mode = (first_non_empty(auth_mode, getattr(cfg, 'auth_mode', None), 'legacy_encrypted') or '').lower()
+    resolved_user_name = first_non_empty(user_name, getattr(cfg, 'user_name', None))
+    resolved_site_password = first_non_empty(site_password, getattr(cfg, 'site_password', None))
+    resolved_encrypted_password = first_non_empty(encrypted_password, getattr(cfg, 'encrypted_password', None))
+    resolved_api_token = first_non_empty(api_token, getattr(cfg, 'api_token', None))
+
+    if mode in ('token', 'api_token'):
+        if not resolved_api_token:
+            raise click.ClickException('Auth mode token requires --api-token or SOLAX_API_TOKEN.')
+        return requests.Session(), resolved_api_token
+
+    if mode in ('legacy_encrypted', 'encrypted_login', 'legacy'):
+        if not resolved_user_name:
+            raise click.ClickException('Missing username. Provide --user-name or USER_NAME/SOLAX_USER_NAME.')
+
+        # Backward compatibility: if encrypted password is missing, allow site_password as a fallback.
+        login_password = first_non_empty(resolved_encrypted_password, resolved_site_password)
+        if not login_password:
+            raise click.ClickException(
+                'Missing password. Provide --encrypted-password, --site-password, ENCRYPTED_PASSWORD, or SITE_PASSWORD.'
+            )
+
+        session, session_response = login(LEGACY_LOGIN_URL, proxies, resolved_user_name, login_password)
+        token = session_response.get('token')
+        if not token:
+            raise click.ClickException(f'Login failed. No token returned. Response keys: {list(session_response.keys())}')
+        return session, token
+
+    raise click.ClickException(f'Unsupported auth mode "{mode}".')
+
+
 # Press the green button in the gutter to run the script.
 def get_daily_data(session, token, url, date: datetime, proxies):
     payload = {
@@ -98,7 +141,17 @@ def get_daily_data(session, token, url, date: datetime, proxies):
 
 
 @extract.command('history')
-def extract_history():
+@click.option('--auth-mode',
+              type=click.Choice(['legacy_encrypted', 'token'], case_sensitive=False),
+              required=False,
+              default=None,
+              help='Authentication mode. Defaults to config or legacy_encrypted.')
+@click.option('--user-name', required=False, default=None, help='SolaX username override.')
+@click.option('--site-password', required=False, default=None, help='SolaX password override.')
+@click.option('--encrypted-password', required=False, default=None,
+              help='Pre-encrypted SolaX password override for legacy login endpoint.')
+@click.option('--api-token', required=False, default=None, help='Direct API token override.')
+def extract_history(auth_mode, user_name, site_password, encrypted_password, api_token):
     with clock_watch(print, f'Download history') as cw:
         # fiddler proxy
         http_proxy = "http://127.0.0.1:8888"
@@ -129,11 +182,17 @@ def extract_history():
         except:
             last_json_datetime = datetime.strptime('2023-09-01', '%Y-%m-%d')
 
-        session, session_response = login('https://www.solaxcloud.com/phoebus/login/loginNew', proxies,
-                                          cfg.user_name, cfg.encrypted_password)
+        session, token = resolve_session_token(
+            proxies=proxies,
+            auth_mode=auth_mode,
+            user_name=user_name,
+            site_password=site_password,
+            encrypted_password=encrypted_password,
+            api_token=api_token,
+        )
         while last_json_datetime < datetime.now():
-            data = get_daily_data(session, session_response.get('token'),
-                                  'https://www.solaxcloud.com/blue/phoebus/site/getSiteTotalPower',
+            data = get_daily_data(session, token,
+                                  LEGACY_DAILY_URL,
                                   last_json_datetime, proxies
                                   )
             json_response = json_decode(data)
