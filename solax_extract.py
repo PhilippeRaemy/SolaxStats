@@ -1,21 +1,16 @@
-import re
-from datetime import datetime, timedelta
 import json
 import os
-from distutils.command.upload import upload
-from turtledemo.sorting_animate import partition
-from typing import List, Tuple
+import re
+import warnings
+from datetime import datetime, timedelta
+from typing import List
 
 import pandas as pd
-import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import click
 import requests
-from numpy.ma.core import power
-from pandas import DataFrame
-from pyarrow.pandas_compat import dataframe_to_types
 
 import solax_configure as cfg
 import schemas
@@ -102,7 +97,8 @@ def resolve_session_token(proxies, auth_mode=None, user_name=None, site_password
         session, session_response = login(LEGACY_LOGIN_URL, proxies, resolved_user_name, login_password)
         token = session_response.get('token')
         if not token:
-            raise click.ClickException(f'Login failed. No token returned. Response keys: {list(session_response.keys())}')
+            raise click.ClickException(
+                f'Login failed. No token returned. Response keys: {list(session_response.keys())}')
         return session, token
 
     raise click.ClickException(f'Unsupported auth mode "{mode}".')
