@@ -384,29 +384,28 @@ def get_auth_artifacts_via_browser(user_name, site_password, login_url=None, hea
 
 
 def save_auth_to_config(token=None, encrypted_password=None):
-    local_file = getattr(cfg, 'local_file', None)
-    if not local_file:
-        raise click.ClickException('No config file path available in current configuration.')
+    try:
+        cfg.save_secret_config({'api_token': token, 'encrypted_password': encrypted_password})
+    except Exception as ex:
+        raise click.ClickException(f'Unable to save auth secrets: {ex}') from ex
 
-    config = {}
-    if os.path.exists(local_file):
-        with open(local_file, 'r', encoding='utf8') as fi:
-            content = fi.read().strip()
-            if content:
-                config = json.loads(content)
 
-    if token:
-        config['api_token'] = token
-    if encrypted_password:
-        config['encrypted_password'] = encrypted_password
-    os.makedirs(os.path.dirname(local_file), exist_ok=True)
-    with open(local_file, 'w', encoding='utf8') as fi:
-        json.dump(config, fi, indent=2)
+def save_runtime_defaults(user_name=None, site_password=None, auth_mode=None, login_url=None):
+    public_updates = {}
+    if auth_mode:
+        public_updates['auth_mode'] = auth_mode
+    if login_url:
+        public_updates['solax_login_url'] = login_url
+    if public_updates:
+        cfg.save_public_config(public_updates)
 
-    if token:
-        setattr(cfg, 'api_token', token)
-    if encrypted_password:
-        setattr(cfg, 'encrypted_password', encrypted_password)
+    secret_updates = {}
+    if user_name:
+        secret_updates['user_name'] = user_name
+    if site_password:
+        secret_updates['site_password'] = site_password
+    if secret_updates:
+        cfg.save_secret_config(secret_updates)
 
 
 def is_auth_failure(response, payload):
@@ -599,6 +598,13 @@ def get_daily_data(session, token, url, date: datetime, proxies):
 def extract_history(auth_mode, user_name, site_password, encrypted_password, api_token, browser_headless,
                     login_url, timeout_seconds, debug_login):
     with clock_watch(print, f'Download history') as cw:
+        save_runtime_defaults(
+            user_name=user_name,
+            site_password=site_password,
+            auth_mode=auth_mode,
+            login_url=login_url,
+        )
+
         # fiddler proxy
         http_proxy = "http://127.0.0.1:8888"
         https_proxy = "http://127.0.0.1:8888"
@@ -692,7 +698,7 @@ def extract_history(auth_mode, user_name, site_password, encrypted_password, api
               help='Browser login timeout in seconds.')
 @click.option('--debug-login', is_flag=True, default=False,
               help='Print login-page diagnostics if field discovery fails.')
-@click.option('--save-config', is_flag=True, default=False,
+@click.option('--save-config/--no-save-config', default=True,
               help='Persist token and discovered encrypted password in local config file.')
 def token_auto(user_name, site_password, login_url, headless, timeout_seconds, debug_login, save_config):
     resolved_user_name = first_non_empty(user_name, getattr(cfg, 'user_name', None))
@@ -702,6 +708,8 @@ def token_auto(user_name, site_password, login_url, headless, timeout_seconds, d
         raise click.ClickException('Missing username. Provide --user-name or USER_NAME/SOLAX_USER_NAME.')
     if not resolved_site_password:
         raise click.ClickException('Missing password. Provide --site-password or SITE_PASSWORD/SOLAX_SITE_PASSWORD.')
+
+    save_runtime_defaults(user_name=resolved_user_name, site_password=resolved_site_password, login_url=login_url)
 
     artifacts = get_auth_artifacts_via_browser(
         user_name=resolved_user_name,

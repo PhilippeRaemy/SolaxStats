@@ -10,6 +10,14 @@ import click
 file_segments = []
 dated_file_pattern = re.compile('.*\.(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d)\..*$')
 
+SECRET_KEYS = {
+    'user_name',
+    'site_password',
+    'config_password',
+    'encrypted_password',
+    'api_token',
+}
+
 
 def date_from_filename(filename):
     if isinstance(filename, datetime):
@@ -56,15 +64,87 @@ def gen_feather_a(granularity):
     return namer
 
 
+def read_json_file(file_path):
+    if not file_path or not os.path.exists(file_path):
+        return {}
+    with open(file_path, 'r', encoding='utf8') as fi:
+        content = fi.read().strip()
+        return json.loads(content) if content else {}
+
+
+def write_json_file(file_path, data):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w', encoding='utf8') as fi:
+        json.dump(data, fi, indent=2)
+
+
+def save_public_config(updates):
+    local_file = getattr(sys.modules[__name__], 'local_file', None)
+    if not local_file:
+        raise ValueError('Cannot save public config before read_config initialization.')
+
+    filtered = {k: v for k, v in updates.items() if v is not None and k not in SECRET_KEYS}
+    if not filtered:
+        return
+
+    current = read_json_file(local_file)
+    current.update(filtered)
+    write_json_file(local_file, current)
+
+    _config.update(filtered)
+    this_module = sys.modules[__name__]
+    for k, v in filtered.items():
+        setattr(this_module, k, v)
+
+
+def save_secret_config(updates):
+    local_secrets_file = getattr(sys.modules[__name__], 'local_secrets_file', None)
+    if not local_secrets_file:
+        raise ValueError('Cannot save secret config before read_config initialization.')
+
+    filtered = {k: v for k, v in updates.items() if v is not None and k in SECRET_KEYS}
+    if not filtered:
+        return
+
+    current = read_json_file(local_secrets_file)
+    current.update(filtered)
+    write_json_file(local_secrets_file, current)
+
+    _config.update(filtered)
+    this_module = sys.modules[__name__]
+    for k, v in filtered.items():
+        setattr(this_module, k, v)
+
+
+def migrate_secrets_from_public(local_file, local_secrets_file):
+    public_cfg = read_json_file(local_file)
+    if not public_cfg:
+        return {}
+
+    secret_updates = {k: public_cfg.get(k) for k in SECRET_KEYS if public_cfg.get(k) is not None}
+    if not secret_updates:
+        return {}
+
+    existing_secrets = read_json_file(local_secrets_file)
+    merged_secrets = {**existing_secrets, **secret_updates}
+    write_json_file(local_secrets_file, merged_secrets)
+
+    for key in SECRET_KEYS:
+        if key in public_cfg:
+            del public_cfg[key]
+    write_json_file(local_file, public_cfg)
+    return secret_updates
+
+
 def read_config():
     solax_stats_folder = os.environ.get('SOLAX_STATS_FOLDER', os.path.dirname(__file__))
     solax_stats_file = os.environ.get('SOLAX_STATS_FILE', 'solax.json')
+    solax_secrets_file = os.environ.get('SOLAX_SECRETS_FILE', 'solax_secrets.json')
 
     def insert_re(segments, *args) -> re:
         return re.compile('.'.join(segments + list(args)))
 
     local_file = os.path.join(solax_stats_folder, solax_stats_file)
-    file_segments = solax_stats_file.split('.')[:-1]
 
     config = {
         'user_name'           : os.environ.get('SOLAX_USER_NAME', os.environ.get('USER_NAME')),
@@ -77,25 +157,43 @@ def read_config():
         'site_id'             : os.environ.get('SITE_ID'),
         'solax_stats_folder'  : solax_stats_folder,
         'solax_stats_file'    : solax_stats_file,
+        'solax_secrets_file'  : solax_secrets_file,
         'target_file_pattern' : re.compile('.*(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d).json$'),
         'local_file'          : local_file,
-        're_json'             : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)', 'json'),
-        're_feather_d'        : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)', 'feather'),
+        'local_secrets_file'  : os.path.join(solax_stats_folder, solax_secrets_file),
+        're_json'             : None,
+        're_feather_d'        : None,
         # 're_feather_m'       : insert_re(file_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)', 'feather'),
         # 're_feather_y'       : insert_re(file_segments, r'(?P<yyyy>\d{4})', 'feather'),
         # 're_feather_a'       : insert_re(file_segments, 'feather'),
-        'file_segments'       : file_segments
+        'file_segments'       : []
     }
 
     indirections = 5
     while --indirections:
         if os.path.exists(local_file):
-            with open(local_file, 'r') as cgf:
-                config = {**config, **json.loads(cgf.read())}
+            config = {**config, **read_json_file(local_file)}
         configured = os.path.join(config['solax_stats_folder'], config['solax_stats_file'])
+        configured_secrets = os.path.join(config['solax_stats_folder'], config.get('solax_secrets_file', solax_secrets_file))
         if local_file == configured:
             break
         local_file = configured
+        config['local_secrets_file'] = configured_secrets
+
+    config['local_file'] = local_file
+    config['local_secrets_file'] = os.path.join(config['solax_stats_folder'], config['solax_secrets_file'])
+
+    # Migrate old secrets accidentally stored in the public config file.
+    migrated_secrets = migrate_secrets_from_public(config['local_file'], config['local_secrets_file'])
+
+    # Merge secrets file on top of public config.
+    config = {**config, **read_json_file(config['local_secrets_file'])}
+    config = {**config, **migrated_secrets}
+
+    final_segments = config['solax_stats_file'].split('.')[:-1]
+    config['file_segments'] = final_segments
+    config['re_json'] = insert_re(final_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)', 'json')
+    config['re_feather_d'] = insert_re(final_segments, r'(?P<yyyy>\d{4})-(?P<mm>\d\d)-(?P<dd>\d\d)', 'feather')
 
     # post-read settings
     config['solax_rawdata_folder']= os.path.join(config['solax_stats_folder'], 'rawdata')
